@@ -31,6 +31,7 @@ import { storyPanelIdentity, storyPanelTags } from "./story-panel-content";
 import type {
   InboxMessage,
   Language,
+  PosttestStatus,
   ResonancePreferences,
   StoryReaction,
   Story,
@@ -52,7 +53,8 @@ type IconName =
   | "logout"
   | "sun"
   | "moon"
-  | "bell";
+  | "bell"
+  | "clipboard";
 type ViewMode = "explore" | "owned" | "resonance" | "liked";
 type NavigationItemId = ViewMode;
 type GalaxyCategory = string;
@@ -156,6 +158,10 @@ const starLobbyCopy = {
     confirm: "确认",
     rearranging: "正在重新排列…",
     rearrangeFailed: "暂时无法重新排列，请稍后再试。",
+    questionnaire: "问卷",
+    questionnairePending: "后测问卷待填写",
+    questionnaireCompleted: "后测问卷已完成",
+    questionnaireCompletedNotice: "你已经填写过后测问卷，感谢参与！",
   },
   en: {
     language: "Switch language",
@@ -218,6 +224,10 @@ const starLobbyCopy = {
     confirm: "Confirm",
     rearranging: "Rearranging…",
     rearrangeFailed: "Stories could not be rearranged. Try again shortly.",
+    questionnaire: "Survey",
+    questionnairePending: "Post-study questionnaire pending",
+    questionnaireCompleted: "Post-study questionnaire completed",
+    questionnaireCompletedNotice: "You have already completed the post-study questionnaire. Thank you!",
   },
 } as const;
 
@@ -315,6 +325,15 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
       <>
         <path d="M18 8.5a6 6 0 1 0-12 0c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5Z" />
         <path d="M13.7 20a2 2 0 0 1-3.4 0" />
+      </>
+    ),
+    clipboard: (
+      <>
+        <rect x="5" y="4" width="14" height="17" rx="2" />
+        <path d="M9 4.5V3h6v1.5" />
+        <path d="M8.5 9h7" />
+        <path d="M8.5 13h7" />
+        <path d="M8.5 17h4.5" />
       </>
     ),
     thumbsDown: (
@@ -1068,6 +1087,55 @@ function FloatingMenu({
   );
 }
 
+function PosttestReminder({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <aside className="posttest-reminder" role="status" aria-label="后测问卷提醒 / Post-study reminder">
+      <button
+        type="button"
+        className="posttest-reminder-close"
+        aria-label="关闭提醒 / Dismiss reminder"
+        onClick={onDismiss}
+      >
+        <Icon name="x" size={16} />
+      </button>
+      <span aria-hidden="true">FINAL STEP · 最后一步</span>
+      <p>你可以在这个页面自由探索故事。当你觉得浏览得差不多了，请点击右下方「问卷」按钮，填写最后一份问卷。</p>
+      <p>
+        Feel free to explore the stories on this page. When you feel you have explored enough, click “Questionnaire” in
+        the lower-right corner to complete the final questionnaire.
+      </p>
+    </aside>
+  );
+}
+
+function PosttestDock({
+  language,
+  status,
+  onOpen,
+  onCompletedClick,
+}: {
+  language: Language;
+  status: PosttestStatus;
+  onOpen: () => void;
+  onCompletedClick: () => void;
+}) {
+  const text = starLobbyCopy[language];
+  const completed = status === "completed";
+  return (
+    <button
+      type="button"
+      className={`posttest-dock ${completed ? "is-completed" : "is-unread"}`}
+      aria-label={completed ? text.questionnaireCompleted : text.questionnairePending}
+      onClick={completed ? onCompletedClick : onOpen}
+    >
+      <Icon name="clipboard" size={19} />
+      <span>{text.questionnaire}</span>
+      {!completed && <i aria-hidden="true">!</i>}
+      {completed && <b aria-hidden="true">✓</b>}
+    </button>
+  );
+}
+
 function ResonanceBar({
   language,
   value,
@@ -1567,6 +1635,13 @@ export function StarLobby({
   showTour = false,
   onTourFinish,
   onTourSkip,
+  posttestAvailable = false,
+  posttestStatus = "not_required",
+  showPosttestReminder = false,
+  posttestNotice = "",
+  onPosttestOpen,
+  onPosttestReminderDismiss,
+  onPosttestNoticeConsumed,
   removedStoryIds = [],
   inbox = [],
   onMarkInboxRead,
@@ -1591,6 +1666,13 @@ export function StarLobby({
   showTour?: boolean;
   onTourFinish?: () => void;
   onTourSkip?: () => void;
+  posttestAvailable?: boolean;
+  posttestStatus?: PosttestStatus;
+  showPosttestReminder?: boolean;
+  posttestNotice?: string;
+  onPosttestOpen?: () => void;
+  onPosttestReminderDismiss?: () => void;
+  onPosttestNoticeConsumed?: () => void;
   /** 被管理员下架的星点 id，星图上直接不画 */
   removedStoryIds?: string[];
   inbox?: InboxMessage[];
@@ -1610,6 +1692,8 @@ export function StarLobby({
   const previousLanguage = useRef(language);
   const [translationPendingIds, setTranslationPendingIds] = useState<string[]>([]);
   const [translationFailedIds, setTranslationFailedIds] = useState<string[]>([]);
+  const [posttestToast, setPosttestToast] = useState("");
+  const posttestReminderTracked = useRef(false);
   const initialBatchId = stories.find((story) => story.recommendationBatchId)?.recommendationBatchId ?? null;
   const [lobbyViewId, setLobbyViewId] = useState(() => createLobbyView(initialBatchId));
   const lobbyViewIdRef = useRef(lobbyViewId);
@@ -1857,6 +1941,22 @@ export function StarLobby({
   useEffect(() => {
     reactionsRef.current = reactions;
   }, [reactions]);
+  useEffect(() => {
+    if (!showPosttestReminder || posttestReminderTracked.current) return;
+    posttestReminderTracked.current = true;
+    track("posttest_reminder_shown", {
+      questionnaire_version: "posttest_v1",
+      source: "star_lobby",
+      status: posttestStatus,
+    });
+  }, [showPosttestReminder, posttestStatus]);
+  useEffect(() => {
+    if (!posttestNotice) return;
+    setPosttestToast(posttestNotice);
+    onPosttestNoticeConsumed?.();
+    const timer = window.setTimeout(() => setPosttestToast(""), 5200);
+    return () => window.clearTimeout(timer);
+  }, [posttestNotice, onPosttestNoticeConsumed]);
   useEffect(() => {
     updateAnalyticsContext({ lobbyViewId, recommendationBatchId: initialBatchId });
     if (!lobbyViewed.current) {
@@ -2130,6 +2230,55 @@ export function StarLobby({
         onDisplayNameChange={onDisplayNameChange}
       />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
+      {showPosttestReminder && (
+        <PosttestReminder
+          onDismiss={() => {
+            track("posttest_reminder_dismissed", {
+              questionnaire_version: "posttest_v1",
+              source: "star_lobby",
+              status: posttestStatus,
+            });
+            onPosttestReminderDismiss?.();
+          }}
+        />
+      )}
+      {posttestAvailable && (
+        <PosttestDock
+          language={language}
+          status={posttestStatus}
+          onOpen={() => {
+            if (showPosttestReminder) {
+              track("posttest_reminder_dismissed", {
+                questionnaire_version: "posttest_v1",
+                source: "questionnaire_entry",
+                status: posttestStatus,
+              });
+            }
+            track("posttest_entry_clicked", {
+              questionnaire_version: "posttest_v1",
+              source: "star_lobby_button",
+              status: posttestStatus,
+            });
+            onPosttestOpen?.();
+          }}
+          onCompletedClick={() => {
+            track("posttest_completed_button_clicked", {
+              questionnaire_version: "posttest_v1",
+              source: "star_lobby_button",
+              status: "completed",
+            });
+            setPosttestToast(
+              "你已经填写过后测问卷，感谢参与！ / You have already completed the post-study questionnaire. Thank you!",
+            );
+          }}
+        />
+      )}
+      {posttestToast && (
+        <div className="posttest-toast" role="status">
+          <span aria-hidden="true">✓</span>
+          {posttestToast}
+        </div>
+      )}
       {/*
         大厅是整条引导的终点：走完就停在大厅让用户自己逛，不要再跳去写故事。
         （这里以前会调 onStartStory()，那是大厅还排在流程最前面时的衔接方式。）

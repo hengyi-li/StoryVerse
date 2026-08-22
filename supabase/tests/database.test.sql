@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(78);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'stories', 'stories table exists');
@@ -12,6 +12,21 @@ select has_table('public', 'recommendation_results', 'recommendation results tab
 select has_table('public', 'admin_audit_logs', 'admin audit log exists');
 select has_table('public', 'image_generation_attempts', 'image generation attempts table exists');
 select has_table('public', 'story_translations', 'story translation cache exists');
+select has_table('public', 'pretest_responses', 'pre-study response table exists');
+select has_table('public', 'posttest_responses', 'post-study response table exists');
+select has_column('public', 'profiles', 'pretest_required', 'profiles carry the pre-study requirement gate');
+select policies_are(
+  'public',
+  'pretest_responses',
+  array['pretest_responses_owner_read'],
+  'participants can only use the explicit read policy for pre-study responses'
+);
+select policies_are(
+  'public',
+  'posttest_responses',
+  array['posttest_responses_owner_read'],
+  'participants can only use the explicit read policy for post-study responses'
+);
 select is(
   (select indexdef like 'CREATE UNIQUE INDEX%' from pg_indexes
     where schemaname = 'public' and indexname = 'generated_images_one_per_story_idx'),
@@ -55,6 +70,125 @@ insert into public.profiles (id, username, display_name, anonymous_number) value
   ('00000000-0000-0000-0000-000000000999', 'reference_user', '参照用户', 999),
   ('00000000-0000-0000-0000-000000000998', 'candidate_user', '候选用户', 998),
   ('00000000-0000-0000-0000-000000000997', 'private_user', '私密用户', 997);
+
+select is(
+  (select pretest_required from public.profiles where id = '00000000-0000-0000-0000-000000000999'),
+  true,
+  'profiles created after the migration require the pre-study by default'
+);
+
+insert into public.pretest_responses (user_id, status, current_step, consented, birth_year, consented_at)
+values ('00000000-0000-0000-0000-000000000999', 'in_progress', 2, true, 1900, now());
+select is(
+  (select birth_year::integer from public.pretest_responses where user_id = '00000000-0000-0000-0000-000000000999'),
+  1900,
+  'the lower birth-year boundary is accepted'
+);
+update public.pretest_responses set birth_year = 2026
+where user_id = '00000000-0000-0000-0000-000000000999';
+select is(
+  (select birth_year::integer from public.pretest_responses where user_id = '00000000-0000-0000-0000-000000000999'),
+  2026,
+  'the upper birth-year boundary is accepted'
+);
+select throws_ok(
+  $$update public.pretest_responses set birth_year = 1899
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514',
+  null,
+  'a birth year below 1900 is rejected'
+);
+insert into public.pretest_responses (user_id, status, current_step, declined_at)
+values ('00000000-0000-0000-0000-000000000998', 'declined', 1, now());
+select is(
+  (select count(*)::integer from public.pretest_responses
+    where user_id = '00000000-0000-0000-0000-000000000998' and birth_year is null and consented = false),
+  1,
+  'declined responses retain no demographic answer'
+);
+select throws_ok(
+  $$update public.pretest_responses set current_step = 2
+    where user_id = '00000000-0000-0000-0000-000000000998'$$,
+  '55000',
+  'PRETEST_RESPONSE_LOCKED',
+  'declined responses are immutable'
+);
+
+insert into public.posttest_responses (user_id, status, current_step, answers)
+values (
+  '00000000-0000-0000-0000-000000000999',
+  'in_progress',
+  1,
+  '{"engagement_01": 1}'::jsonb
+);
+select is(
+  (select (answers ->> 'engagement_01')::integer from public.posttest_responses
+    where user_id = '00000000-0000-0000-0000-000000000999'),
+  1,
+  'post-study responses accept the lower Likert boundary'
+);
+update public.posttest_responses set answers = '{"engagement_01": 5}'::jsonb
+where user_id = '00000000-0000-0000-0000-000000000999';
+select is(
+  (select (answers ->> 'engagement_01')::integer from public.posttest_responses
+    where user_id = '00000000-0000-0000-0000-000000000999'),
+  5,
+  'post-study responses accept the upper Likert boundary'
+);
+select throws_ok(
+  $$update public.posttest_responses set answers = '{"engagement_01": 0}'::jsonb
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514', null, 'a post-study score below 1 is rejected'
+);
+select throws_ok(
+  $$update public.posttest_responses set answers = '{"engagement_01": 6}'::jsonb
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514', null, 'a post-study score above 5 is rejected'
+);
+select throws_ok(
+  $$update public.posttest_responses set answers = '{"engagement_01": 2.5}'::jsonb
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514', null, 'a fractional post-study score is rejected'
+);
+select throws_ok(
+  $$update public.posttest_responses set answers = '{"unknown_item": 3}'::jsonb
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514', null, 'an unknown post-study item is rejected'
+);
+select throws_ok(
+  $$update public.posttest_responses
+    set status = 'completed', submitted_at = now()
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '23514', null, 'an incomplete post-study response cannot be completed'
+);
+update public.posttest_responses
+set
+  status = 'completed',
+  current_step = 5,
+  submitted_at = now(),
+  answers = (
+    select jsonb_object_agg(prefix || '_' || lpad(item_number::text, 2, '0'), 1)
+    from (values
+      ('engagement', 8),
+      ('publicness', 10),
+      ('diversity', 7),
+      ('recommendation', 10),
+      ('authorship_ai', 6)
+    ) as sections(prefix, item_count)
+    cross join lateral generate_series(1, item_count) as item_number
+  )
+where user_id = '00000000-0000-0000-0000-000000000999';
+select is(
+  (select status::text from public.posttest_responses
+    where user_id = '00000000-0000-0000-0000-000000000999'),
+  'completed',
+  'all 41 post-study answers can be completed'
+);
+select throws_ok(
+  $$update public.posttest_responses set current_step = 4
+    where user_id = '00000000-0000-0000-0000-000000000999'$$,
+  '55000', 'POSTTEST_RESPONSE_LOCKED', 'completed post-study responses are immutable'
+);
 
 insert into public.stories (
   id, user_id, author_display_name, title, body, mood, life_stage, age, gender, city,

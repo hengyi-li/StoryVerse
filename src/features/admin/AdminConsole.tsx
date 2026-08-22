@@ -37,6 +37,21 @@ import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { localizedError } from "../../lib/localized-error";
 import type { Language, ModerationFlag, ReviewBucket, ReviewItem } from "../../types/domain";
 import type { ThemeMode } from "../../types/ui";
+import {
+  communityOptions,
+  educationOptions,
+  employmentOptions,
+  genderOptions,
+  residenceOptions,
+} from "../pretest/pretest-content";
+import {
+  chinaRegions,
+  disciplineOptions,
+  ethnicityOptions,
+  industryOptions,
+  type BilingualOption,
+} from "../pretest/pretest-options.generated";
+import { posttestItemIds, posttestSections } from "../posttest/posttest-content";
 import "./admin.css";
 
 type AdminView =
@@ -47,6 +62,8 @@ type AdminView =
   | "accounts"
   | "feedback"
   | "analytics"
+  | "pretest"
+  | "posttest"
   | "types"
   | "algorithm"
   | "imports";
@@ -93,6 +110,16 @@ const viewDefinitions: Record<AdminView, ViewDefinition> = {
     description: ["查看创作、星空、阅读与共鸣指标", "Inspect creation, lobby, reading and resonance metrics"],
     icon: BarChart3,
   },
+  pretest: {
+    label: ["前测数据", "Pre-study"],
+    description: ["按账号查看、筛选并导出前测问卷", "Inspect, filter and export pre-study responses"],
+    icon: FileText,
+  },
+  posttest: {
+    label: ["后测数据", "Post-study"],
+    description: ["按账号查看、筛选并导出后测问卷", "Inspect, filter and export post-study responses"],
+    icon: ClipboardCheck,
+  },
   types: {
     label: ["类型与颜色", "Types & colours"],
     description: ["管理 21 种故事类型及星星颜色", "Manage story types and star colours"],
@@ -113,7 +140,10 @@ const viewDefinitions: Record<AdminView, ViewDefinition> = {
 const navGroups: Array<{ label: [string, string]; views: AdminView[] }> = [
   { label: ["今日处理", "Today"], views: ["overview", "reviews", "tasks"] },
   { label: ["内容与用户", "Content & people"], views: ["stories", "accounts", "feedback"] },
-  { label: ["实验与配置", "Experiment & system"], views: ["analytics", "types", "algorithm", "imports"] },
+  {
+    label: ["实验与配置", "Experiment & system"],
+    views: ["analytics", "pretest", "posttest", "types", "algorithm", "imports"],
+  },
 ];
 
 const csvHeaders = [
@@ -496,7 +526,9 @@ export function AdminConsole({
 
   const definition = viewDefinitions[view];
   const CurrentIcon = definition.icon;
-  const searchBox = !(["analytics", "types", "algorithm", "imports"] as AdminView[]).includes(view) && (
+  const searchBox = !(["analytics", "pretest", "posttest", "types", "algorithm", "imports"] as AdminView[]).includes(
+    view,
+  ) && (
     <label className="admin-search-box">
       <Search size={17} aria-hidden="true" />
       <input
@@ -870,6 +902,8 @@ export function AdminConsole({
                 {view === "analytics" && (
                   <AnalyticsPanel analytics={dashboard.analytics} accounts={dashboard.users} zh={zh} />
                 )}
+                {view === "pretest" && <PretestPanel zh={zh} />}
+                {view === "posttest" && <PosttestPanel zh={zh} />}
                 {view === "types" && <TypesPanel rows={dashboard.types} zh={zh} run={run} />}
                 {view === "algorithm" && (
                   <AlgorithmPanel
@@ -1320,6 +1354,591 @@ function AlgorithmPanel({
         </button>
       </footer>
     </article>
+  );
+}
+
+type PretestFilters = { account: string; status: string; start: string; end: string };
+
+const pretestCsvFields = [
+  "user_id",
+  "username",
+  "display_name",
+  "status",
+  "current_step",
+  "questionnaire_version",
+  "consented",
+  "birth_year",
+  "gender",
+  "residence_region",
+  "country_region",
+  "province",
+  "city",
+  "community_type",
+  "ethnicity",
+  "education",
+  "education_other",
+  "employment",
+  "industry_primary",
+  "industry_secondary",
+  "discipline",
+  "major",
+  "consented_at",
+  "submitted_at",
+  "declined_at",
+  "account_created_at",
+] as const;
+
+function pretestOptionMap() {
+  const map = new Map<string, BilingualOption>();
+  const add = (options: BilingualOption[]) => options.forEach((option) => map.set(option.value, option));
+  add(genderOptions);
+  add(residenceOptions);
+  add(communityOptions);
+  add(educationOptions);
+  add(employmentOptions);
+  add(ethnicityOptions);
+  for (const groups of [chinaRegions, industryOptions, disciplineOptions]) {
+    groups.forEach((group) => {
+      map.set(group.value, group);
+      add(group.children);
+    });
+  }
+  return map;
+}
+
+const pretestOptionsByCode = pretestOptionMap();
+
+function pretestStatusLabel(status: unknown, zh: boolean) {
+  const labels: Record<string, [string, string]> = {
+    not_required: ["无需填写", "Not required"],
+    not_started: ["未开始", "Not started"],
+    in_progress: ["填写中", "In progress"],
+    completed: ["已完成", "Completed"],
+    declined: ["已拒绝", "Declined"],
+  };
+  return labels[String(status)]?.[zh ? 0 : 1] ?? String(status || "—");
+}
+
+function pretestAnswer(value: unknown) {
+  if (value == null || value === "") return "—";
+  const option = pretestOptionsByCode.get(String(value));
+  return option ? `${option.labelZh} / ${option.labelEn}` : String(value);
+}
+
+function csvCell(value: unknown) {
+  const text = value == null ? "" : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function PretestPanel({ zh }: { zh: boolean }) {
+  const [filters, setFilters] = useState<PretestFilters>({ account: "", status: "", start: "", end: "" });
+  const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const queryInput = () => ({
+    ...filters,
+    start: filters.start ? `${filters.start}T00:00:00.000Z` : "",
+    end: filters.end ? `${filters.end}T23:59:59.999Z` : "",
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await dataService.adminAction<{ responses: Array<Record<string, unknown>> }>(
+        "pretest-query",
+        queryInput(),
+      );
+      setRows(result.responses);
+      setSelectedId((current) =>
+        current && result.responses.some((row) => String(row.user_id) === current) ? current : "",
+      );
+    } catch (cause) {
+      setError(
+        localizedError(cause, zh ? "zh" : "en", { zh: "无法读取前测数据。", en: "Could not load pre-study data." }),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const result = await dataService.adminAction<{ responses: Array<Record<string, unknown>> }>(
+        "pretest-export",
+        queryInput(),
+      );
+      const csv = [
+        pretestCsvFields.join(","),
+        ...result.responses.map((row) => pretestCsvFields.map((field) => csvCell(row[field])).join(",")),
+      ].join("\r\n");
+      const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `storyverse-pretest-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (cause) {
+      setError(localizedError(cause, zh ? "zh" : "en", { zh: "导出失败。", en: "Export failed." }));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const selected = rows.find((row) => String(row.user_id) === selectedId) ?? null;
+  const answerFields: Array<{ key: string; label: [string, string] }> = [
+    { key: "birth_year", label: ["出生年份", "Birth year"] },
+    { key: "gender", label: ["性别", "Gender"] },
+    { key: "residence_region", label: ["常住地区", "Residence"] },
+    { key: "country_region", label: ["国家 / 地区", "Country / region"] },
+    { key: "province", label: ["省级地区", "Province-level region"] },
+    { key: "city", label: ["城市", "City"] },
+    { key: "community_type", label: ["社区类型", "Community type"] },
+    { key: "ethnicity", label: ["民族", "Ethnicity"] },
+    { key: "education", label: ["最高学历", "Education"] },
+    { key: "education_other", label: ["其他学历", "Other education"] },
+    { key: "employment", label: ["工作状态", "Employment"] },
+    { key: "industry_primary", label: ["一级行业", "Primary industry"] },
+    { key: "industry_secondary", label: ["二级行业", "Secondary industry"] },
+    { key: "discipline", label: ["学科", "Discipline"] },
+    { key: "major", label: ["专业", "Major"] },
+  ];
+
+  return (
+    <div className="admin-pretest-panel">
+      <section className="admin-panel admin-pretest-toolbar">
+        <div className="admin-panel-heading">
+          <div>
+            <span className="admin-eyebrow">PRE-STUDY · PRETEST_V1</span>
+            <h2>{zh ? "参与者前测" : "Participant pre-study"}</h2>
+            <p>{zh ? "按登录账号筛选；问卷答案只读。" : "Filter by login account. Responses are read-only."}</p>
+          </div>
+          <button
+            type="button"
+            className="admin-button is-primary"
+            onClick={() => void exportCsv()}
+            disabled={exporting}
+          >
+            <Download size={16} />{" "}
+            {exporting ? (zh ? "导出中…" : "Exporting…") : zh ? "导出当前结果" : "Export current results"}
+          </button>
+        </div>
+        <div className="admin-pretest-filters">
+          <label>
+            <span>{zh ? "登录账号" : "Login account"}</span>
+            <input
+              value={filters.account}
+              onChange={(event) => setFilters((current) => ({ ...current, account: event.target.value }))}
+              placeholder={zh ? "输入账号关键词" : "Account keyword"}
+            />
+          </label>
+          <label>
+            <span>{zh ? "状态" : "Status"}</span>
+            <select
+              value={filters.status}
+              onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+            >
+              <option value="">{zh ? "全部状态" : "All statuses"}</option>
+              {["not_required", "not_started", "in_progress", "completed", "declined"].map((status) => (
+                <option key={status} value={status}>
+                  {pretestStatusLabel(status, zh)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{zh ? "开始日期" : "Start date"}</span>
+            <input
+              type="date"
+              value={filters.start}
+              onChange={(event) => setFilters((current) => ({ ...current, start: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>{zh ? "结束日期" : "End date"}</span>
+            <input
+              type="date"
+              value={filters.end}
+              onChange={(event) => setFilters((current) => ({ ...current, end: event.target.value }))}
+            />
+          </label>
+          <button type="button" className="admin-button is-secondary" onClick={() => void load()} disabled={loading}>
+            <Filter size={16} /> {zh ? "应用筛选" : "Apply filters"}
+          </button>
+        </div>
+        {error && (
+          <div className="admin-alert is-error">
+            <AlertTriangle size={17} />
+            {error}
+          </div>
+        )}
+      </section>
+
+      <div className="admin-pretest-grid">
+        <section className="admin-panel admin-pretest-list">
+          <header>
+            <b>{zh ? `${rows.length} 个账号` : `${rows.length} accounts`}</b>
+            {loading && <span className="admin-spinner" />}
+          </header>
+          {!loading && !rows.length && (
+            <Empty
+              icon={FileText}
+              title={zh ? "没有匹配结果" : "No matching results"}
+              body={zh ? "调整筛选条件后重试。" : "Try different filters."}
+            />
+          )}
+          {rows.map((row) => (
+            <button
+              type="button"
+              key={String(row.user_id)}
+              className={selectedId === String(row.user_id) ? "is-selected" : ""}
+              onClick={() => setSelectedId(String(row.user_id))}
+            >
+              <span className="admin-avatar">{String(row.display_name || row.username || "?").slice(0, 1)}</span>
+              <span>
+                <b>@{String(row.username)}</b>
+                <small>{String(row.display_name || "—")}</small>
+              </span>
+              <i className={`admin-status status-${String(row.status)}`}>{pretestStatusLabel(row.status, zh)}</i>
+              <ChevronRight size={16} />
+            </button>
+          ))}
+        </section>
+
+        <section className="admin-panel admin-pretest-detail">
+          {!selected ? (
+            <Empty
+              large
+              icon={UserRound}
+              title={zh ? "选择一个账号" : "Select an account"}
+              body={zh ? "查看该参与者的前测状态和完整答案。" : "View pre-study status and complete answers."}
+            />
+          ) : (
+            <>
+              <header>
+                <div>
+                  <span className="admin-eyebrow">@{String(selected.username)}</span>
+                  <h2>{String(selected.display_name || "—")}</h2>
+                </div>
+                <span className={`admin-status status-${String(selected.status)}`}>
+                  {pretestStatusLabel(selected.status, zh)}
+                </span>
+              </header>
+              <dl className="admin-pretest-meta">
+                <div>
+                  <dt>{zh ? "当前步骤" : "Current step"}</dt>
+                  <dd>{String(selected.current_step ?? "—")} / 4</dd>
+                </div>
+                <div>
+                  <dt>{zh ? "提交时间" : "Submitted"}</dt>
+                  <dd>{selected.submitted_at ? new Date(String(selected.submitted_at)).toLocaleString() : "—"}</dd>
+                </div>
+                <div>
+                  <dt>{zh ? "拒绝时间" : "Declined"}</dt>
+                  <dd>{selected.declined_at ? new Date(String(selected.declined_at)).toLocaleString() : "—"}</dd>
+                </div>
+                <div>
+                  <dt>{zh ? "问卷版本" : "Version"}</dt>
+                  <dd>{String(selected.questionnaire_version || "—")}</dd>
+                </div>
+              </dl>
+              <div className="admin-pretest-answers">
+                {answerFields.map((field) => (
+                  <div key={field.key}>
+                    <span>
+                      {field.label[0]}
+                      <small>{field.label[1]}</small>
+                    </span>
+                    <b>{pretestAnswer(selected[field.key])}</b>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+type PosttestFilters = { account: string; status: string; start: string; end: string };
+
+const posttestCsvFields = [
+  "user_id",
+  "username",
+  "display_name",
+  "status",
+  "current_step",
+  "questionnaire_version",
+  ...posttestItemIds,
+  "reminder_dismissed_at",
+  "submitted_at",
+  "account_created_at",
+] as const;
+
+function posttestStatusLabel(status: unknown, zh: boolean) {
+  const labels: Record<string, [string, string]> = {
+    not_required: ["无需填写", "Not required"],
+    not_started: ["未开始", "Not started"],
+    in_progress: ["填写中", "In progress"],
+    completed: ["已完成", "Completed"],
+  };
+  return labels[String(status)]?.[zh ? 0 : 1] ?? String(status || "—");
+}
+
+function PosttestPanel({ zh }: { zh: boolean }) {
+  const [filters, setFilters] = useState<PosttestFilters>({ account: "", status: "", start: "", end: "" });
+  const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const queryInput = () => ({
+    ...filters,
+    start: filters.start ? `${filters.start}T00:00:00.000Z` : "",
+    end: filters.end ? `${filters.end}T23:59:59.999Z` : "",
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await dataService.adminAction<{ responses: Array<Record<string, unknown>> }>(
+        "posttest-query",
+        queryInput(),
+      );
+      setRows(result.responses);
+      setSelectedId((current) =>
+        current && result.responses.some((row) => String(row.user_id) === current) ? current : "",
+      );
+    } catch (cause) {
+      setError(
+        localizedError(cause, zh ? "zh" : "en", {
+          zh: "无法读取后测数据。",
+          en: "Could not load post-study data.",
+        }),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const result = await dataService.adminAction<{ responses: Array<Record<string, unknown>> }>(
+        "posttest-export",
+        queryInput(),
+      );
+      const csv = [
+        posttestCsvFields.join(","),
+        ...result.responses.map((row) => posttestCsvFields.map((field) => csvCell(row[field])).join(",")),
+      ].join("\r\n");
+      const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `storyverse-posttest-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (cause) {
+      setError(localizedError(cause, zh ? "zh" : "en", { zh: "导出失败。", en: "Export failed." }));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const selected = rows.find((row) => String(row.user_id) === selectedId) ?? null;
+
+  return (
+    <div className="admin-pretest-panel admin-posttest-panel">
+      <section className="admin-panel admin-pretest-toolbar">
+        <div className="admin-panel-heading">
+          <div>
+            <span className="admin-eyebrow">POST-STUDY · POSTTEST_V1</span>
+            <h2>{zh ? "参与者后测" : "Participant post-study"}</h2>
+            <p>
+              {zh
+                ? "按登录账号或昵称筛选；全部 41 道题的答案只读。"
+                : "Filter by login account or nickname. All 41 responses are read-only."}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="admin-button is-primary"
+            onClick={() => void exportCsv()}
+            disabled={exporting}
+          >
+            <Download size={16} />{" "}
+            {exporting ? (zh ? "导出中…" : "Exporting…") : zh ? "导出当前结果" : "Export current results"}
+          </button>
+        </div>
+        <div className="admin-pretest-filters">
+          <label>
+            <span>{zh ? "账号或昵称" : "Account or nickname"}</span>
+            <input
+              value={filters.account}
+              onChange={(event) => setFilters((current) => ({ ...current, account: event.target.value }))}
+              placeholder={zh ? "输入账号或昵称关键词" : "Account or nickname keyword"}
+            />
+          </label>
+          <label>
+            <span>{zh ? "状态" : "Status"}</span>
+            <select
+              value={filters.status}
+              onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+            >
+              <option value="">{zh ? "全部状态" : "All statuses"}</option>
+              {["not_required", "not_started", "in_progress", "completed"].map((status) => (
+                <option key={status} value={status}>
+                  {posttestStatusLabel(status, zh)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{zh ? "开始日期" : "Start date"}</span>
+            <input
+              type="date"
+              value={filters.start}
+              onChange={(event) => setFilters((current) => ({ ...current, start: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>{zh ? "结束日期" : "End date"}</span>
+            <input
+              type="date"
+              value={filters.end}
+              onChange={(event) => setFilters((current) => ({ ...current, end: event.target.value }))}
+            />
+          </label>
+          <button type="button" className="admin-button is-secondary" onClick={() => void load()} disabled={loading}>
+            <Filter size={16} /> {zh ? "应用筛选" : "Apply filters"}
+          </button>
+        </div>
+        {error && (
+          <div className="admin-alert is-error">
+            <AlertTriangle size={17} />
+            {error}
+          </div>
+        )}
+      </section>
+
+      <div className="admin-pretest-grid">
+        <section className="admin-panel admin-pretest-list">
+          <header>
+            <b>{zh ? `${rows.length} 个账号` : `${rows.length} accounts`}</b>
+            {loading && <span className="admin-spinner" />}
+          </header>
+          {!loading && !rows.length && (
+            <Empty
+              icon={ClipboardCheck}
+              title={zh ? "没有匹配结果" : "No matching results"}
+              body={zh ? "调整筛选条件后重试。" : "Try different filters."}
+            />
+          )}
+          {rows.map((row) => (
+            <button
+              type="button"
+              key={String(row.user_id)}
+              className={selectedId === String(row.user_id) ? "is-selected" : ""}
+              onClick={() => setSelectedId(String(row.user_id))}
+            >
+              <span className="admin-avatar">{String(row.display_name || row.username || "?").slice(0, 1)}</span>
+              <span>
+                <b>@{String(row.username)}</b>
+                <small>{String(row.display_name || "—")}</small>
+              </span>
+              <i className={`admin-status status-${String(row.status)}`}>{posttestStatusLabel(row.status, zh)}</i>
+              <ChevronRight size={16} />
+            </button>
+          ))}
+        </section>
+
+        <section className="admin-panel admin-pretest-detail">
+          {!selected ? (
+            <Empty
+              large
+              icon={UserRound}
+              title={zh ? "选择一个账号" : "Select an account"}
+              body={zh ? "查看该参与者的后测状态和完整答案。" : "View post-study status and complete answers."}
+            />
+          ) : (
+            <>
+              <header>
+                <div>
+                  <span className="admin-eyebrow">@{String(selected.username)}</span>
+                  <h2>{String(selected.display_name || "—")}</h2>
+                </div>
+                <span className={`admin-status status-${String(selected.status)}`}>
+                  {posttestStatusLabel(selected.status, zh)}
+                </span>
+              </header>
+              <dl className="admin-pretest-meta">
+                <div>
+                  <dt>{zh ? "当前步骤" : "Current step"}</dt>
+                  <dd>{String(selected.current_step ?? "—")} / 5</dd>
+                </div>
+                <div>
+                  <dt>{zh ? "提交时间" : "Submitted"}</dt>
+                  <dd>{selected.submitted_at ? new Date(String(selected.submitted_at)).toLocaleString() : "—"}</dd>
+                </div>
+                <div>
+                  <dt>{zh ? "提醒关闭时间" : "Reminder dismissed"}</dt>
+                  <dd>
+                    {selected.reminder_dismissed_at
+                      ? new Date(String(selected.reminder_dismissed_at)).toLocaleString()
+                      : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{zh ? "问卷版本" : "Version"}</dt>
+                  <dd>{String(selected.questionnaire_version || "—")}</dd>
+                </div>
+              </dl>
+              <div className="admin-posttest-answers">
+                {posttestSections.map((section) => (
+                  <section key={section.step}>
+                    <header>
+                      <b>{section.titleZh}</b>
+                      <small>{section.titleEn}</small>
+                    </header>
+                    {section.items.map((item) => (
+                      <div key={item.id}>
+                        <span>
+                          <i>{item.id}</i>
+                          {item.zh}
+                          <small>{item.en}</small>
+                        </span>
+                        <b>{selected[item.id] == null ? "—" : `${String(selected[item.id])} / 5`}</b>
+                      </div>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }
 

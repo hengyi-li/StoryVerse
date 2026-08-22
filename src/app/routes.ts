@@ -3,6 +3,8 @@ import type { AuthMode, GatewaySection } from "../types/ui";
 
 const routeMap = {
   intro: "/",
+  pretest: "/PreTest",
+  posttest: "/PostTest",
   storyStart: "/StoryStart",
   storyWrite: "/StoryWrite",
   storyAnalyzing: "/StoryAnalyzing",
@@ -28,6 +30,8 @@ export function routePatchFromPath(pathname = window.location.pathname): Partial
   authMode?: AuthMode;
 } {
   const path = normalizedPath(pathname);
+  if (path === routeMap.pretest) return { screen: "pretest" };
+  if (path === routeMap.posttest) return { screen: "posttest" };
   if (path === routeMap.storyStart) return { screen: "storyEditor", storyEditorStep: 0 };
   if (path === routeMap.storyWrite) return { screen: "storyEditor", storyEditorStep: 1 };
   if (path === routeMap.storyAnalyzing) return { screen: "storyEditor", storyEditorStep: 2 };
@@ -81,7 +85,7 @@ export function authenticatedEntryScreen({
 }
 
 export function guardPostPublishScreenForFirstStory(screen: ScreenId, hasPublishedStory: boolean): ScreenId {
-  const requiresPublishedStory: ScreenId[] = ["resonance", "recommendations", "starLobby"];
+  const requiresPublishedStory: ScreenId[] = ["posttest", "resonance", "recommendations", "starLobby"];
   return requiresPublishedStory.includes(screen) && !hasPublishedStory ? "storyEditor" : screen;
 }
 
@@ -120,6 +124,8 @@ export function shouldAutosaveDraft(screen: ScreenId, storyEditorStep: number): 
 }
 
 export function pathFromState(state: AppState) {
+  if (state.screen === "pretest") return routeMap.pretest;
+  if (state.screen === "posttest") return routeMap.posttest;
   if (state.screen === "storyEditor") {
     return (
       [routeMap.storyStart, routeMap.storyWrite, routeMap.storyAnalyzing, routeMap.storyPage][state.storyEditorStep] ??

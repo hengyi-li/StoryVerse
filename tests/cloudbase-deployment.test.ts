@@ -18,6 +18,8 @@ describe("CloudBase deployment contract", () => {
   it("CloudBase 构建为所有可直接访问页面生成 SPA 入口", () => {
     const routeFallbackScript = readFileSync("scripts/create-spa-route-fallbacks.mjs", "utf8");
     for (const route of [
+      "PreTest",
+      "PostTest",
       "StoryStart",
       "StoryWrite",
       "StoryAnalyzing",

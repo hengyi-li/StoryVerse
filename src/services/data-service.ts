@@ -9,6 +9,12 @@ import type {
   StoryAnalysis,
   StoryDraft,
   Language,
+  PosttestAnswers,
+  PosttestProgress,
+  PosttestStep,
+  PretestAnswers,
+  PretestProgress,
+  PretestStep,
   StoryReaction,
   StoryStatus,
   StoryTranslation,
@@ -128,6 +134,7 @@ function profileFromRow(row: Record<string, unknown>): UserProfile {
     anonymousNumber: Number(row.anonymous_number ?? 404),
     role: row.role === "admin" ? "admin" : "user",
     status: row.status === "suspended" ? "suspended" : "active",
+    pretestRequired: Boolean(row.pretest_required),
   };
 }
 
@@ -365,6 +372,26 @@ export const dataService = {
     if (error) throw new DataServiceError(error.message, "LOGOUT_FAILED");
     return { loggedOut: true };
   },
+
+  getPretestProgress: () => invoke<PretestProgress>("pretest", undefined, "GET"),
+
+  savePretestStep: (step: PretestStep, answers: PretestAnswers) =>
+    invoke<PretestProgress>("pretest", { action: "save", step, answers }),
+
+  submitPretest: (answers: PretestAnswers) =>
+    invoke<PretestProgress>("pretest", { action: "submit", step: 4, answers }),
+
+  declinePretest: () => invoke<PretestProgress>("pretest", { action: "decline" }),
+
+  getPosttestProgress: () => invoke<PosttestProgress>("posttest", undefined, "GET"),
+
+  savePosttestStep: (step: PosttestStep, answers: PosttestAnswers) =>
+    invoke<PosttestProgress>("posttest", { action: "save", step, answers }),
+
+  submitPosttest: (answers: PosttestAnswers) =>
+    invoke<PosttestProgress>("posttest", { action: "submit", step: 5, answers }),
+
+  dismissPosttestReminder: () => invoke<PosttestProgress>("posttest", { action: "dismiss_reminder" }),
 
   getCurrentUser: async () => {
     assertSupabaseConfigured();

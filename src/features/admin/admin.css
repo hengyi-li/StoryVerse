@@ -2580,3 +2580,309 @@
     font-size: 16px;
   }
 }
+/* Pre-study questionnaire data */
+.admin-pretest-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-pretest-toolbar {
+  padding: 24px;
+}
+
+.admin-pretest-filters {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.4fr) repeat(3, minmax(130px, 0.8fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 22px;
+}
+
+.admin-pretest-filters label {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-pretest-filters label > span {
+  color: var(--admin-muted, #6d7478);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-pretest-filters input,
+.admin-pretest-filters select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(20, 34, 43, 0.13);
+  border-radius: 10px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-page.theme-night .admin-pretest-filters input,
+.admin-page.theme-night .admin-pretest-filters select {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color-scheme: dark;
+}
+
+.admin-pretest-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.74fr) minmax(0, 1.26fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-pretest-list,
+.admin-pretest-detail {
+  min-height: 520px;
+  padding: 20px;
+}
+
+.admin-pretest-list > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 5px 10px;
+}
+
+.admin-pretest-list > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  margin: 3px 0;
+  padding: 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.admin-pretest-list > button:hover,
+.admin-pretest-list > button.is-selected {
+  border-color: rgba(20, 158, 199, 0.18);
+  background: rgba(82, 205, 239, 0.08);
+}
+
+.admin-pretest-list > button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.admin-pretest-list > button b,
+.admin-pretest-list > button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-pretest-list > button small {
+  color: var(--admin-muted, #777);
+  font-size: 11px;
+}
+
+.admin-pretest-list .admin-status {
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.admin-pretest-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 4px 18px;
+  border-bottom: 1px solid rgba(22, 40, 50, 0.09);
+}
+
+.admin-pretest-detail h2 {
+  margin: 5px 0 0;
+  font-size: 28px;
+}
+
+.admin-pretest-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.admin-pretest-meta > div {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(109, 128, 139, 0.07);
+}
+
+.admin-pretest-meta dt,
+.admin-pretest-meta dd {
+  margin: 0;
+}
+
+.admin-pretest-meta dt {
+  color: var(--admin-muted, #747b7f);
+  font-size: 10px;
+}
+
+.admin-pretest-meta dd {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-pretest-answers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(22, 40, 50, 0.09);
+  border-radius: 12px;
+  background: rgba(22, 40, 50, 0.09);
+}
+
+.admin-pretest-answers > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.admin-page.theme-night .admin-pretest-answers > div {
+  background: rgba(18, 24, 28, 0.95);
+}
+
+.admin-pretest-answers span,
+.admin-pretest-answers span small {
+  display: block;
+  color: var(--admin-muted, #747b7f);
+  font-size: 10px;
+}
+
+.admin-pretest-answers b {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.admin-posttest-answers {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-posttest-answers > section {
+  overflow: hidden;
+  border: 1px solid rgba(22, 40, 50, 0.1);
+  border-radius: 13px;
+}
+
+.admin-posttest-answers > section > header {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  background: rgba(64, 177, 213, 0.08);
+}
+
+.admin-posttest-answers > section > header b {
+  font-size: 13px;
+}
+
+.admin-posttest-answers > section > header small {
+  color: var(--admin-muted, #747b7f);
+  font-size: 10px;
+}
+
+.admin-posttest-answers > section > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(22, 40, 50, 0.08);
+}
+
+.admin-posttest-answers > section > div > span {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.admin-posttest-answers > section > div > span i,
+.admin-posttest-answers > section > div > span small {
+  display: block;
+  color: var(--admin-muted, #747b7f);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.admin-posttest-answers > section > div > span i {
+  margin-bottom: 3px;
+  color: #1382a8;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-posttest-answers > section > div > span small {
+  margin-top: 3px;
+}
+
+.admin-posttest-answers > section > div > b {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.admin-page.theme-night .admin-posttest-answers > section,
+.admin-page.theme-night .admin-posttest-answers > section > div {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.admin-status.status-not_required,
+.admin-status.status-not_started {
+  color: #68757b;
+  background: rgba(105, 119, 126, 0.11);
+}
+
+.admin-status.status-in_progress {
+  color: #94620d;
+  background: rgba(230, 173, 61, 0.14);
+}
+
+.admin-status.status-declined {
+  color: #8a5965;
+  background: rgba(185, 111, 132, 0.12);
+}
+
+@media (max-width: 1120px) {
+  .admin-pretest-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-pretest-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-pretest-list,
+  .admin-pretest-detail {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-pretest-filters,
+  .admin-pretest-meta,
+  .admin-pretest-answers {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-pretest-toolbar,
+  .admin-pretest-list,
+  .admin-pretest-detail {
+    padding: 15px;
+  }
+}

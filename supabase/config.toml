@@ -400,6 +400,12 @@ verify_jwt = false
 [functions.analytics-track]
 verify_jwt = false
 
+[functions.pretest]
+verify_jwt = false
+
+[functions.posttest]
+verify_jwt = false
+
 [functions.feedback]
 verify_jwt = false
 

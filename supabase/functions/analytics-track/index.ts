@@ -86,6 +86,19 @@ const eventPriorities: Record<string, AnalyticsPriority> = {
   feedback_submitted: "P2",
   notifications_opened: "P2",
   logout_clicked: "P2",
+  pretest_consent_agreed: "P2",
+  pretest_step_viewed: "P2",
+  pretest_validation_blocked: "P2",
+  pretest_step_saved: "P2",
+  pretest_submitted: "P2",
+  posttest_reminder_shown: "P2",
+  posttest_reminder_dismissed: "P2",
+  posttest_entry_clicked: "P2",
+  posttest_step_viewed: "P2",
+  posttest_validation_blocked: "P2",
+  posttest_step_saved: "P2",
+  posttest_submitted: "P2",
+  posttest_completed_button_clicked: "P2",
 };
 
 const anonymousEventNames = new Set([
@@ -167,10 +180,25 @@ serve(async (request) => {
     userId = data.user?.id ?? null;
   }
   if (userId) {
-    const { data: profile, error } = await admin.from("profiles").select("role,status").eq("id", userId).maybeSingle();
+    const { data: profile, error } = await admin
+      .from("profiles")
+      .select("role,status,pretest_required")
+      .eq("id", userId)
+      .maybeSingle();
     if (error || !profile || profile.status !== "active")
       throw new ApiError(403, "ACCOUNT_UNAVAILABLE", "账号当前不可用。");
     if (profile.role === "admin") return json(request, { accepted: 0, skipped: events.length });
+    if (profile.pretest_required) {
+      const { data: pretest, error: pretestError } = await admin
+        .from("pretest_responses")
+        .select("status,consented")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (pretestError) throw pretestError;
+      if (!pretest?.consented || pretest.status === "declined") {
+        throw new ApiError(403, "PRETEST_CONSENT_REQUIRED", "同意参与研究后才会记录登录态行为数据。");
+      }
+    }
   }
   if (!userId && !origin) throw new ApiError(403, "ORIGIN_REQUIRED", "匿名埋点请求需要有效来源。");
 

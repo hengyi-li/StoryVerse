@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { dataService } from "../services/data-service";
 import { initialState, loadState, saveState } from "../lib/app-state-storage";
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from "../lib/draft-recovery";
-import { setAnalyticsPage, track, updateAnalyticsContext } from "../lib/analytics";
+import { setAnalyticsCollectionMode, setAnalyticsPage, track, updateAnalyticsContext } from "../lib/analytics";
 import {
   authenticatedEntryScreen,
   externalPath,
@@ -19,7 +19,16 @@ import {
   storyEditorStepForProgress,
 } from "./routes";
 import { Gateway } from "../features/gateway/Gateway";
-import type { AppState, StoryDraft, Story, TourSceneId, UserProfile } from "../types/domain";
+import type {
+  AppState,
+  PosttestProgress,
+  PosttestStep,
+  PretestProgress,
+  StoryDraft,
+  Story,
+  TourSceneId,
+  UserProfile,
+} from "../types/domain";
 import type { AppUpdate, AuthMode, GatewayAuthInput, GatewaySection, ThemeMode } from "../types/ui";
 import "../features/tour/tour.css";
 
@@ -41,6 +50,12 @@ const AdminConsole = lazy(() =>
   import("../features/admin/AdminConsole").then((module) => ({ default: module.AdminConsole })),
 );
 const AdminGate = lazy(() => import("../features/admin/AdminGate").then((module) => ({ default: module.AdminGate })));
+const PreTestPage = lazy(() =>
+  import("../features/pretest/PreTestPage").then((module) => ({ default: module.PreTestPage })),
+);
+const PostTestPage = lazy(() =>
+  import("../features/posttest/PostTestPage").then((module) => ({ default: module.PostTestPage })),
+);
 
 function PageLoadingFallback({ themeMode, language }: { themeMode: ThemeMode; language: AppState["language"] }) {
   return (
@@ -77,6 +92,11 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("day");
   const [user, setUser] = useState<UserProfile | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [pretestProgress, setPretestProgress] = useState<PretestProgress | null>(null);
+  const [pretestLoadError, setPretestLoadError] = useState("");
+  const [posttestProgress, setPosttestProgress] = useState<PosttestProgress | null>(null);
+  const [posttestLoadError, setPosttestLoadError] = useState("");
+  const [posttestNotice, setPosttestNotice] = useState("");
   const [localStories, setLocalStories] = useState<Story[]>([]);
   const [ownedStoryIds, setOwnedStoryIds] = useState<string[]>([]);
   const [directStoryRoute, setDirectStoryRoute] = useState(() =>
@@ -98,6 +118,20 @@ export default function App() {
     track("theme_changed", { previous_theme: themeMode, theme: nextTheme });
     updateAnalyticsContext({ theme: nextTheme });
     setThemeMode(nextTheme);
+  };
+  const refreshPosttestProgress = async () => {
+    try {
+      const progress = await dataService.getPosttestProgress();
+      setPosttestProgress(progress);
+      setPosttestLoadError("");
+      return progress;
+    } catch (error) {
+      setPosttestProgress(null);
+      setPosttestLoadError(
+        error instanceof Error ? error.message : "请检查网络后重试。 / Check your connection and try again.",
+      );
+      return null;
+    }
   };
   useEffect(() => saveState(state), [state]);
   const analyticsPageId =
@@ -132,6 +166,37 @@ export default function App() {
       .then(async ({ user: currentUser }) => {
         if (!active) return;
         setUser(currentUser);
+        let gate: PretestProgress;
+        try {
+          gate = await dataService.getPretestProgress();
+        } catch (error) {
+          if (!active) return;
+          setAnalyticsCollectionMode("disabled");
+          setPretestProgress(null);
+          setPretestLoadError(error instanceof Error ? error.message : "请检查网络后重试。 / Please retry.");
+          update({ screen: "pretest", accountScopeId: currentUser.id, isAdmin: currentUser.role === "admin" });
+          setSessionChecked(true);
+          return;
+        }
+        if (!active) return;
+        setPretestProgress(gate);
+        setPretestLoadError("");
+        const gateBlocks = gate.required && gate.status !== "completed";
+        if (gateBlocks) {
+          setPosttestProgress(null);
+          setPosttestLoadError("");
+          setAnalyticsCollectionMode(gate.status === "in_progress" ? "authenticated" : "anonymous_only");
+          update({ screen: "pretest", accountScopeId: currentUser.id, isAdmin: false });
+          setSessionChecked(true);
+          if (gate.status === "declined") {
+            setAnalyticsCollectionMode("disabled");
+            await dataService.logout().catch(() => undefined);
+            if (active) setUser(null);
+          }
+          return;
+        }
+        setAnalyticsCollectionMode(currentUser.role === "admin" ? "disabled" : "authenticated");
+        void refreshPosttestProgress();
         const [savedDraft, loadedStoryProgress, resonance, storyList, ownedStories, inbox, reactions] =
           await Promise.all([
             dataService.getCurrentDraft(),
@@ -158,7 +223,15 @@ export default function App() {
           const progressStep = storyProgress ? storyEditorStepForProgress(storyProgress.status) : null;
           const shouldOpenProgress =
             progressStep !== null && !(storyProgress?.status === "pending_review" && previous.screen === "starLobby");
-          const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(previous.screen, hasSubmittedStory);
+          const requestedScreen =
+            previous.screen === "pretest"
+              ? authenticatedEntryScreen({
+                  isSignup: false,
+                  hasSavedDraft: Boolean(savedDraft),
+                  hasPublishedStory: hasSubmittedStory,
+                })
+              : previous.screen;
+          const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(requestedScreen, hasSubmittedStory);
           const screen = shouldOpenProgress
             ? "storyEditor"
             : guardBlankEditorAfterSubmission({
@@ -228,6 +301,7 @@ export default function App() {
         setSessionChecked(true);
       })
       .catch(async () => {
+        setAnalyticsCollectionMode("anonymous_only");
         const recovery = await loadRecoveryDraft().catch(() => undefined);
         if (!active) return;
         update((previous) => {
@@ -243,7 +317,7 @@ export default function App() {
                   }),
                 }
               : {}),
-            ...(["resonance", "recommendations", "starLobby"].includes(previous.screen)
+            ...(["pretest", "posttest", "resonance", "recommendations", "starLobby"].includes(previous.screen)
               ? { screen: "intro" as const }
               : {}),
           };
@@ -337,6 +411,30 @@ export default function App() {
   };
   useEffect(() => {
     if (!sessionChecked) return;
+    if (!user) {
+      const mayShowDeclined = state.screen === "pretest" && pretestProgress?.status === "declined";
+      if (!mayShowDeclined && !["intro", "admin"].includes(state.screen)) update({ screen: "intro" });
+      return;
+    }
+    const gateBlocks = Boolean(
+      pretestLoadError || (pretestProgress?.required && pretestProgress.status !== "completed"),
+    );
+    if (gateBlocks) {
+      if (state.screen !== "pretest") update({ screen: "pretest" });
+      return;
+    }
+    if (state.screen === "posttest") {
+      if (posttestLoadError || !posttestProgress) return;
+      if (!posttestProgress.required || posttestProgress.status === "completed") {
+        setPosttestNotice(
+          posttestProgress.status === "completed"
+            ? "你已经填写过后测问卷，感谢参与！ / You have already completed the post-study questionnaire. Thank you!"
+            : "此账号不需要填写后测问卷。 / This account does not require the post-study questionnaire.",
+        );
+        update({ screen: state.hasCompletedFirstStory ? "starLobby" : "storyEditor" });
+        return;
+      }
+    }
     const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(state.screen, state.hasCompletedFirstStory);
     const guardedScreen = guardBlankEditorAfterSubmission({
       screen: firstStoryGuardedScreen,
@@ -356,6 +454,12 @@ export default function App() {
     state.draft.body,
     state.analysis?.id,
     directStoryRoute,
+    pretestProgress?.required,
+    pretestProgress?.status,
+    pretestLoadError,
+    posttestProgress?.required,
+    posttestProgress?.status,
+    posttestLoadError,
   ]);
   const enterStarLobby = () => {
     setDirectStoryRoute(false);
@@ -465,6 +569,44 @@ export default function App() {
       throw error;
     }
     const signup = input.mode === "signup";
+    setUser(result.user);
+    updateAnalyticsContext({ role: result.user.role });
+    track("auth_result", { mode: input.mode, success: true });
+    let gate: PretestProgress;
+    try {
+      gate = await dataService.getPretestProgress();
+    } catch (error) {
+      setAnalyticsCollectionMode("disabled");
+      setPretestProgress(null);
+      setPosttestProgress(null);
+      setPosttestLoadError("");
+      setPretestLoadError(error instanceof Error ? error.message : "请检查网络后重试。 / Please retry.");
+      setSessionChecked(true);
+      update({ screen: "pretest", accountScopeId: result.user.id, isAdmin: result.user.role === "admin" });
+      return;
+    }
+    setPretestProgress(gate);
+    setPretestLoadError("");
+    if (gate.required && gate.status !== "completed") {
+      setPosttestProgress(null);
+      setPosttestLoadError("");
+      setAnalyticsCollectionMode(gate.status === "in_progress" ? "authenticated" : "anonymous_only");
+      setSessionChecked(true);
+      update({
+        screen: "pretest",
+        accountScopeId: result.user.id,
+        isAdmin: false,
+        ...(signup ? { tour: { enabled: true, seen: [] }, analysis: null, storyEditorStep: 0 as const } : {}),
+      });
+      if (gate.status === "declined") {
+        setAnalyticsCollectionMode("disabled");
+        await dataService.logout().catch(() => undefined);
+        setUser(null);
+      }
+      return;
+    }
+    setAnalyticsCollectionMode(result.user.role === "admin" ? "disabled" : "authenticated");
+    void refreshPosttestProgress();
     [savedDraft, storyProgress, resonance, storyList, ownedStories, inbox, reactions] = await Promise.all([
       dataService.getCurrentDraft(),
       loadRecoverableStory(result.user.id, signup ? "" : state.accountScopeId, signup ? undefined : state.analysis?.id),
@@ -474,10 +616,6 @@ export default function App() {
       dataService.listNotifications(),
       dataService.listReactions(),
     ]);
-
-    setUser(result.user);
-    updateAnalyticsContext({ role: result.user.role });
-    track("auth_result", { mode: input.mode, success: true });
     setSessionChecked(true);
     setLocalStories(storyList);
     setOwnedStoryIds(ownedStories.map((story) => story.id));
@@ -525,6 +663,135 @@ export default function App() {
     });
   };
 
+  const retryPretest = async () => {
+    if (!user) return;
+    setPretestLoadError("");
+    try {
+      const gate = await dataService.getPretestProgress();
+      setPretestProgress(gate);
+      if (!gate.required || gate.status === "completed") {
+        setAnalyticsCollectionMode(user.role === "admin" ? "disabled" : "authenticated");
+        window.location.reload();
+        return;
+      }
+      if (gate.status === "declined") {
+        setAnalyticsCollectionMode("disabled");
+        await dataService.logout().catch(() => undefined);
+        setUser(null);
+        return;
+      }
+      setAnalyticsCollectionMode(gate.status === "in_progress" ? "authenticated" : "anonymous_only");
+    } catch (error) {
+      setAnalyticsCollectionMode("disabled");
+      setPretestLoadError(error instanceof Error ? error.message : "请检查网络后重试。 / Please retry.");
+    }
+  };
+
+  const savePretestStep = async (step: 1 | 2 | 3 | 4, answers: Parameters<typeof dataService.savePretestStep>[1]) => {
+    const saved = await dataService.savePretestStep(step, answers);
+    setPretestProgress(saved);
+    setPretestLoadError("");
+    if (step === 1) setAnalyticsCollectionMode("authenticated");
+    return saved;
+  };
+
+  const finishPretest = async (answers: Parameters<typeof dataService.submitPretest>[0]) => {
+    if (!user) throw new Error("登录状态已失效，请重新登录。 / Your session has expired.");
+    const completed = await dataService.submitPretest(answers);
+    setPretestProgress(completed);
+    setPretestLoadError("");
+    setAnalyticsCollectionMode("authenticated");
+    void refreshPosttestProgress();
+    const [savedDraft, storyProgress, resonance, storyList, ownedStories, inbox, reactions] = await Promise.all([
+      dataService.getCurrentDraft(),
+      loadRecoverableStory(user.id, state.accountScopeId, state.analysis?.id),
+      dataService.getResonancePreferences(),
+      dataService.listLobbyStories().then((items) => items.map((item) => item.story)),
+      dataService.listOwnedStories(),
+      dataService.listNotifications(),
+      dataService.listReactions(),
+    ]);
+    setLocalStories(storyList);
+    setOwnedStoryIds(ownedStories.map((story) => story.id));
+    const hasSubmittedStory = ownedStories.some(
+      (story) => story.status !== "draft" && story.status !== "analyzing" && story.status !== "needs_confirmation",
+    );
+    const progressStep = storyProgress ? storyEditorStepForProgress(storyProgress.status) : null;
+    update({
+      screen:
+        progressStep !== null
+          ? "storyEditor"
+          : authenticatedEntryScreen({
+              isSignup: !savedDraft && !hasSubmittedStory,
+              hasSavedDraft: Boolean(savedDraft),
+              hasPublishedStory: hasSubmittedStory,
+            }),
+      accountScopeId: user.id,
+      hasCompletedFirstStory: hasSubmittedStory,
+      storyEditorStep: progressStep ?? 0,
+      draft: storyProgress
+        ? { ...initialState.draft, ...storyProgress.draft }
+        : savedDraft
+          ? { ...initialState.draft, ...savedDraft }
+          : { ...initialState.draft, startedAt: Date.now() },
+      analysis: storyProgress?.analysis ?? null,
+      resonance,
+      inbox,
+      reactions,
+      isAdmin: false,
+      tour: { enabled: true, seen: [] },
+    });
+  };
+
+  const declinePretest = async () => {
+    const declinedProgress = await dataService.declinePretest();
+    setPretestProgress(declinedProgress);
+    setAnalyticsCollectionMode("disabled");
+    await dataService.logout();
+    setUser(null);
+    setPosttestProgress(null);
+    setPosttestLoadError("");
+    updateAnalyticsContext({ role: null });
+  };
+
+  const retryPosttest = async () => {
+    await refreshPosttestProgress();
+  };
+
+  const savePosttestStep = async (step: PosttestStep, answers: Parameters<typeof dataService.savePosttestStep>[1]) => {
+    const saved = await dataService.savePosttestStep(step, answers);
+    setPosttestProgress(saved);
+    setPosttestLoadError("");
+    return saved;
+  };
+
+  const finishPosttest = async (answers: Parameters<typeof dataService.submitPosttest>[0]) => {
+    const completed = await dataService.submitPosttest(answers);
+    setPosttestProgress(completed);
+    setPosttestLoadError("");
+    setPosttestNotice("感谢你完成最后一份问卷！ / Thank you for completing the final questionnaire!");
+    update({ screen: "starLobby" });
+  };
+
+  const dismissPosttestReminder = async () => {
+    const optimisticTime = new Date().toISOString();
+    setPosttestProgress((current) =>
+      current ? { ...current, reminderDismissedAt: current.reminderDismissedAt ?? optimisticTime } : current,
+    );
+    try {
+      const progress = await dataService.dismissPosttestReminder();
+      setPosttestProgress(progress);
+      setPosttestLoadError("");
+    } catch (error) {
+      console.info("[StoryVerse] Post-study reminder dismissal could not be saved.", error);
+    }
+  };
+
+  const openPosttest = () => {
+    void dismissPosttestReminder();
+    update({ screen: "posttest" });
+  };
+
   /*
    * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
    * 所以用户往回退一步不会被同一段引导再拦一次。
@@ -548,6 +815,38 @@ export default function App() {
   let content: ReactNode;
   if (!sessionChecked && state.screen !== "intro") {
     content = <PageLoadingFallback themeMode={themeMode} language={state.language} />;
+  } else if (state.screen === "pretest") {
+    content = (
+      <PreTestPage
+        progress={pretestProgress}
+        loadError={pretestLoadError}
+        displayName={user?.displayName ?? ""}
+        language={state.language}
+        themeMode={themeMode}
+        onLanguageChange={changeLanguage}
+        onThemeModeChange={changeThemeMode}
+        onRetry={retryPretest}
+        onSave={savePretestStep}
+        onSubmit={finishPretest}
+        onDecline={declinePretest}
+      />
+    );
+  } else if (state.screen === "posttest") {
+    content = (
+      <PostTestPage
+        progress={posttestProgress}
+        loadError={posttestLoadError}
+        displayName={user?.displayName ?? ""}
+        language={state.language}
+        themeMode={themeMode}
+        onLanguageChange={changeLanguage}
+        onThemeModeChange={changeThemeMode}
+        onRetry={retryPosttest}
+        onSave={savePosttestStep}
+        onSubmit={finishPosttest}
+        onBack={() => update({ screen: "starLobby" })}
+      />
+    );
   } else if (state.screen === "admin") {
     content =
       state.isAdmin && user?.role === "admin" ? (
@@ -557,7 +856,11 @@ export default function App() {
           displayName={user.displayName}
           onLogout={() => {
             void dataService.logout().finally(() => {
+              setAnalyticsCollectionMode("anonymous_only");
               setUser(null);
+              setPretestProgress(null);
+              setPosttestProgress(null);
+              setPosttestLoadError("");
               update({
                 isAdmin: false,
                 inbox: [],
@@ -660,7 +963,11 @@ export default function App() {
         onHome={goHome}
         onLogout={() => {
           void dataService.logout().finally(() => {
+            setAnalyticsCollectionMode("anonymous_only");
             setUser(null);
+            setPretestProgress(null);
+            setPosttestProgress(null);
+            setPosttestLoadError("");
             setSessionChecked(true);
             setLocalStories([]);
             setOwnedStoryIds([]);
@@ -716,6 +1023,22 @@ export default function App() {
         showTour={tourActive("starLobby")}
         onTourFinish={() => finishTour("starLobby")}
         onTourSkip={() => skipTour("starLobby")}
+        posttestAvailable={Boolean(
+          user?.role === "user" && pretestProgress?.required && pretestProgress.status === "completed",
+        )}
+        posttestStatus={posttestProgress?.status ?? "not_started"}
+        showPosttestReminder={Boolean(
+          user?.role === "user" &&
+          pretestProgress?.required &&
+          pretestProgress.status === "completed" &&
+          posttestProgress?.status !== "completed" &&
+          !posttestProgress?.reminderDismissedAt &&
+          !tourActive("starLobby"),
+        )}
+        posttestNotice={posttestNotice}
+        onPosttestOpen={openPosttest}
+        onPosttestReminderDismiss={() => void dismissPosttestReminder()}
+        onPosttestNoticeConsumed={() => setPosttestNotice("")}
         removedStoryIds={[]}
         inbox={state.inbox}
         onMarkInboxRead={() => {

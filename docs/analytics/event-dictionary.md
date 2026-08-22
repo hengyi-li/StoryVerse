@@ -45,43 +45,56 @@
 
 ## P2
 
-| 事件                                                              | 触发                               | 主要私有参数                          | 截图      |
-| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------- | --------- |
-| `home_cta_clicked` / `home_preview_opened`                        | 首页入口                           | target/source                         | ANA-01    |
-| `auth_mode_changed` / `auth_attempted` / `auth_result`            | 登录注册                           | mode、success、非敏感 error_code      | ANA-01    |
-| `password_recovery_started` / `password_recovery_result`          | 找回密码                           | success、error_code                   | ANA-01    |
-| `language_changed` / `theme_changed`                              | 全站切换                           | previous/new                          | ANA-01    |
-| `icebreaker_card_exposed` / `icebreaker_selected`                 | 卡片渲染/选择                      | guide、position                       | ANA-02    |
-| `icebreaker_custom_input` / `icebreaker_continue_clicked`         | 自定义入口/继续                    | 文本、字符数、guide                   | ANA-02    |
-| `story_field_focused`                                             | 标题、正文或城市聚焦               | field                                 | ANA-03    |
-| `story_metadata_changed`                                          | 情绪、阶段、年龄、性别、城市、人物 | fields、values                        | ANA-03    |
-| `city_search_executed` / `city_selected`                          | 城市联想                           | query、结果、来源、坐标               | ANA-03    |
-| `voice_input_started` / `voice_input_ended`                       | 语音输入                           | success、插入字符数                   | ANA-03    |
-| `focus_mode_changed`                                              | 专注模式开关                       | enabled                               | ANA-03    |
-| `story_validation_blocked`                                        | 校验阻止继续                       | step、missing_fields                  | ANA-03/05 |
-| `story_back_clicked` / `story_autosaved`                          | 返回/自动保存                      | 步骤、draft、version、success         | ANA-03    |
-| `story_analysis_started` / `story_analysis_result`                | AI 请求                            | attempt、duration、workflow、decision | ANA-04    |
-| `story_analysis_retry_clicked` / `moderation_routed`              | 重试/审核路由                      | attempt、decision、status             | ANA-04    |
-| `pending_review_lobby_entered`                                    | 待审用户进入大厅                   | story_id                              | ANA-04    |
-| `story_confirmation_viewed` / `story_body_edited`                 | 确认页                             | story、前后长度                       | ANA-05    |
-| `story_label_editor_opened` / `story_custom_theme_added`          | 标签编辑                           | field/theme                           | ANA-05    |
-| `image_style_selected`                                            | 风格切换                           | previous/style                        | ANA-05    |
-| `image_generation_started` / `image_generation_result`            | 图片生成                           | style、success、reused、error         | ANA-05    |
-| `image_downloaded`                                                | 下载图片                           | story、style                          | ANA-05    |
-| `story_submit_result`                                             | 发布或转审核结果                   | success、status、story                | ANA-05    |
-| `resonance_confirm_clicked`                                       | 首次共鸣页确认；不计入大厅重排漏斗 | preferences、source                   | ANA-06    |
-| `recommendation_page_viewed`                                      | 推荐页进入                         | —                                     | ANA-07    |
-| `recommendation_card_exposed`                                     | 卡片可见 ≥50%                      | story、rank、batch、scores            | ANA-07    |
-| `recommendation_card_clicked`                                     | 卡片点击                           | story、rank、batch、scores            | ANA-07    |
-| `recommendation_refresh_clicked` / `recommendation_lobby_entered` | 换一批/进大厅                      | opened_story_count                    | ANA-07    |
-| `lobby_search_opened`                                             | 搜索框展开                         | view                                  | ANA-08    |
-| `lobby_gesture_summary`                                           | 离开大厅                           | wheel/rotate/zoom 次数、有效时长      | ANA-08    |
-| `story_panel_closed`                                              | 关闭故事面板                       | story、reason                         | ANA-09    |
-| `report_started` / `report_result`                                | 举报流程                           | story、reason、note_length、success   | ANA-12    |
-| `account_opened` / `profile_update_result`                        | 个人中心                           | 修改种类、success                     | ANA-12    |
-| `feedback_submitted`                                              | 反馈成功                           | character_count                       | ANA-12    |
-| `notifications_opened`                                            | 打开收件箱                         | unread/count                          | ANA-12    |
-| `logout_clicked`                                                  | 退出                               | source                                | ANA-12    |
+| 事件                                                              | 触发                                 | 主要私有参数                                | 截图      |
+| ----------------------------------------------------------------- | ------------------------------------ | ------------------------------------------- | --------- |
+| `home_cta_clicked` / `home_preview_opened`                        | 首页入口                             | target/source                               | ANA-01    |
+| `auth_mode_changed` / `auth_attempted` / `auth_result`            | 登录注册                             | mode、success、非敏感 error_code            | ANA-01    |
+| `password_recovery_started` / `password_recovery_result`          | 找回密码                             | success、error_code                         | ANA-01    |
+| `language_changed` / `theme_changed`                              | 全站切换                             | previous/new                                | ANA-01    |
+| `icebreaker_card_exposed` / `icebreaker_selected`                 | 卡片渲染/选择                        | guide、position                             | ANA-02    |
+| `icebreaker_custom_input` / `icebreaker_continue_clicked`         | 自定义入口/继续                      | 文本、字符数、guide                         | ANA-02    |
+| `story_field_focused`                                             | 标题、正文或城市聚焦                 | field                                       | ANA-03    |
+| `story_metadata_changed`                                          | 情绪、阶段、年龄、性别、城市、人物   | fields、values                              | ANA-03    |
+| `city_search_executed` / `city_selected`                          | 城市联想                             | query、结果、来源、坐标                     | ANA-03    |
+| `voice_input_started` / `voice_input_ended`                       | 语音输入                             | success、插入字符数                         | ANA-03    |
+| `focus_mode_changed`                                              | 专注模式开关                         | enabled                                     | ANA-03    |
+| `story_validation_blocked`                                        | 校验阻止继续                         | step、missing_fields                        | ANA-03/05 |
+| `story_back_clicked` / `story_autosaved`                          | 返回/自动保存                        | 步骤、draft、version、success               | ANA-03    |
+| `story_analysis_started` / `story_analysis_result`                | AI 请求                              | attempt、duration、workflow、decision       | ANA-04    |
+| `story_analysis_retry_clicked` / `moderation_routed`              | 重试/审核路由                        | attempt、decision、status                   | ANA-04    |
+| `pending_review_lobby_entered`                                    | 待审用户进入大厅                     | story_id                                    | ANA-04    |
+| `story_confirmation_viewed` / `story_body_edited`                 | 确认页                               | story、前后长度                             | ANA-05    |
+| `story_label_editor_opened` / `story_custom_theme_added`          | 标签编辑                             | field/theme                                 | ANA-05    |
+| `image_style_selected`                                            | 风格切换                             | previous/style                              | ANA-05    |
+| `image_generation_started` / `image_generation_result`            | 图片生成                             | style、success、reused、error               | ANA-05    |
+| `image_downloaded`                                                | 下载图片                             | story、style                                | ANA-05    |
+| `story_submit_result`                                             | 发布或转审核结果                     | success、status、story                      | ANA-05    |
+| `resonance_confirm_clicked`                                       | 首次共鸣页确认；不计入大厅重排漏斗   | preferences、source                         | ANA-06    |
+| `recommendation_page_viewed`                                      | 推荐页进入                           | —                                           | ANA-07    |
+| `recommendation_card_exposed`                                     | 卡片可见 ≥50%                        | story、rank、batch、scores                  | ANA-07    |
+| `recommendation_card_clicked`                                     | 卡片点击                             | story、rank、batch、scores                  | ANA-07    |
+| `recommendation_refresh_clicked` / `recommendation_lobby_entered` | 换一批/进大厅                        | opened_story_count                          | ANA-07    |
+| `lobby_search_opened`                                             | 搜索框展开                           | view                                        | ANA-08    |
+| `lobby_gesture_summary`                                           | 离开大厅                             | wheel/rotate/zoom 次数、有效时长            | ANA-08    |
+| `story_panel_closed`                                              | 关闭故事面板                         | story、reason                               | ANA-09    |
+| `report_started` / `report_result`                                | 举报流程                             | story、reason、note_length、success         | ANA-12    |
+| `account_opened` / `profile_update_result`                        | 个人中心                             | 修改种类、success                           | ANA-12    |
+| `feedback_submitted`                                              | 反馈成功                             | character_count                             | ANA-12    |
+| `notifications_opened`                                            | 打开收件箱                           | unread/count                                | ANA-12    |
+| `logout_clicked`                                                  | 退出                                 | source                                      | ANA-12    |
+| `pretest_consent_agreed`                                          | 第一步同意保存成功                   | questionnaire_version                       | ANA-13    |
+| `pretest_step_viewed`                                             | 同意后进入任一问卷步骤               | questionnaire_version、step                 | ANA-13    |
+| `pretest_validation_blocked`                                      | 前端校验阻止继续                     | step、fields、error_count                   | ANA-13    |
+| `pretest_step_saved`                                              | 步骤草稿服务端保存成功               | questionnaire_version、step                 | ANA-13    |
+| `pretest_submitted`                                               | 完整问卷锁定提交成功                 | questionnaire_version、step                 | ANA-13    |
+| `posttest_reminder_shown`                                         | 合格用户完成或跳过大厅引导后首次显示 | questionnaire_version、status               | ANA-14    |
+| `posttest_reminder_dismissed`                                     | 主动关闭提醒或进入问卷               | questionnaire_version、source               | ANA-14    |
+| `posttest_entry_clicked`                                          | 点击大厅右下角问卷入口               | questionnaire_version、status               | ANA-14    |
+| `posttest_step_viewed`                                            | 进入任一后测步骤                     | questionnaire_version、step、answered_count | ANA-14    |
+| `posttest_validation_blocked`                                     | 当前部分存在未答题项                 | step、missing_count                         | ANA-14    |
+| `posttest_step_saved`                                             | 当前部分服务端保存成功               | questionnaire_version、step、answer_count   | ANA-14    |
+| `posttest_submitted`                                              | 41 题锁定提交成功                    | questionnaire_version、step、answer_count   | ANA-14    |
+| `posttest_completed_button_clicked`                               | 已完成用户再次点击问卷按钮           | questionnaire_version、status               | ANA-14    |
 
 ## 不触发规则
 
@@ -90,6 +103,9 @@
 - 阅读面板打开但页面隐藏的时间不累积。
 - 搜索为空、800ms 内继续输入、相同视图下相同规范化查询，不重复上报。
 - 管理员角色的任何产品行为不入 `analytics_events`。
+- 新账号点击同意前不发送登录态产品事件；拒绝只写 `pretest_responses`，不写行为事件。
+- 具体前测答案不复制到埋点属性。
+- 后测的具体题目分值不复制到埋点属性，只记录版本、步骤、状态、耗时和回答数量。
 - 埋点失败不改变登录、保存、审核、推荐、反应、举报和发布结果。
 
 ## 指标、代码位置与 QA
@@ -117,4 +133,6 @@
 | `voice_input_*`、`focus_mode_changed`、`story_back_clicked`、`story_autosaved`                                   | 语音、专注、返回和保存行为                 | `src/features/story-editor/StoryEditor.tsx`、`src/app/App.tsx`                                   | 事件合约与页面热点人工检查；失败不阻塞业务                         |
 | `language_changed`、`theme_changed`                                                                              | 语言和主题使用                             | `src/app/App.tsx` 及各页面切换入口                                                               | UI 旅程验证中英文切换；公共参数保存切换时状态                      |
 | `report_*`、`account_*`、`profile_update_result`、`feedback_submitted`、`notifications_opened`、`logout_clicked` | 举报、账户、反馈、消息和退出               | `src/features/star-lobby/StarLobby.tsx`                                                          | UI 旅程验证举报、账户、反馈、收件箱和可靠退出上报                  |
-| 全部事件                                                                                                         | 送达率、重复率、缺失参数、版本和业务一致性 | `analytics-track`、`202608200001_analytics.sql`、`202608200003_analytics_research_dashboard.sql` | 73 项单测/构建；24 项远端合约检查；管理员账号组合下钻检查          |
+| `pretest_*`                                                                                                      | 前测同意、步骤完成和最终提交漏斗           | `src/features/pretest/PreTestPage.tsx`、`src/app/App.tsx`、`pretest` Edge Function               | 条件分支、暂停埋点、草稿恢复、拒绝和提交 E2E                       |
+| `posttest_*`                                                                                                     | 后测提醒、进入、步骤保存和完成漏斗         | `src/features/posttest/PostTestPage.tsx`、`StarLobby.tsx`、`posttest` Edge Function              | 资格判断、提醒状态、五步恢复、41 题提交和锁定 E2E                  |
+| 全部事件                                                                                                         | 送达率、重复率、缺失参数、版本和业务一致性 | `analytics-track`、`202608200001_analytics.sql`、`202608200003_analytics_research_dashboard.sql` | 134 项前端/合约测试、78 项数据库测试、39 项后测真实接口 QA         |

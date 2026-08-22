@@ -16,22 +16,26 @@
 | ANA-10 | 大厅共鸣设置   | ①选择变化 ②确认 ③重新排列结果                   |
 | ANA-11 | 引导           | ①步骤曝光 ②下一步/返回 ③跳过/完成               |
 | ANA-12 | 账户与安全     | ①账号 ②消息 ③反馈 ④举报 ⑤退出                   |
+| ANA-13 | 前测问卷       | ①同意/拒绝 ②步骤曝光 ③校验 ④保存/提交           |
+| ANA-14 | 后测问卷       | ①大厅提醒/入口 ②步骤曝光 ③校验 ④保存/提交       |
 
 ## 已归档图片
 
-| 编号   | 桌面截图                                                               |
-| ------ | ---------------------------------------------------------------------- |
-| ANA-01 | `ANA-01-home-desktop.png`                                              |
-| ANA-02 | `ANA-02-icebreaker-desktop.png`                                        |
-| ANA-03 | `ANA-03-story-write-e2e-desktop.png`                                   |
-| ANA-04 | `ANA-04-story-analyzing-e2e-desktop.png`                               |
-| ANA-05 | `ANA-05-story-page-desktop.png`、`ANA-05-story-page-image-desktop.png` |
-| ANA-06 | `ANA-06-resonance-desktop.png`                                         |
-| ANA-07 | `ANA-07-recommendations-desktop.png`                                   |
-| ANA-08 | `ANA-08-star-lobby-desktop.png`                                        |
-| ANA-09 | `ANA-09-story-panel-desktop.png`                                       |
-| ANA-10 | `ANA-10-lobby-resonance-desktop.png`                                   |
-| ANA-11 | `ANA-11-tour-desktop.png`                                              |
-| ANA-12 | `ANA-12-account-feedback-desktop.png`、`ANA-12-report-desktop.png`     |
+| 编号   | 桌面截图                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------- |
+| ANA-01 | `ANA-01-home-desktop.png`                                                                                 |
+| ANA-02 | `ANA-02-icebreaker-desktop.png`                                                                           |
+| ANA-03 | `ANA-03-story-write-e2e-desktop.png`                                                                      |
+| ANA-04 | `ANA-04-story-analyzing-e2e-desktop.png`                                                                  |
+| ANA-05 | `ANA-05-story-page-desktop.png`、`ANA-05-story-page-image-desktop.png`                                    |
+| ANA-06 | `ANA-06-resonance-desktop.png`                                                                            |
+| ANA-07 | `ANA-07-recommendations-desktop.png`                                                                      |
+| ANA-08 | `ANA-08-star-lobby-desktop.png`                                                                           |
+| ANA-09 | `ANA-09-story-panel-desktop.png`                                                                          |
+| ANA-10 | `ANA-10-lobby-resonance-desktop.png`                                                                      |
+| ANA-11 | `ANA-11-tour-desktop.png`                                                                                 |
+| ANA-12 | `ANA-12-account-feedback-desktop.png`、`ANA-12-report-desktop.png`                                        |
+| ANA-13 | 待本地虚拟新账号完成桌面与移动端标注截图                                                                  |
+| ANA-14 | `ANA-14-posttest-reminder-desktop.png`、`ANA-14-posttest-desktop-night.png`、`ANA-14-posttest-mobile.png` |
 
-桌面截图已覆盖 ANA-01 至 ANA-12。移动端与桌面布局不同时使用 `-mobile` 后缀；本轮没有把未验证的移动截图标记为完成。
+桌面截图已覆盖 ANA-01 至 ANA-12。ANA-14 已使用本地虚拟参与者归档大厅提醒、桌面夜间和手机问卷；ANA-13 待归档。移动端与桌面布局不同时使用 `-mobile` 后缀。

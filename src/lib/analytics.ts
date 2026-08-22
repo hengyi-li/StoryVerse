@@ -17,7 +17,13 @@ type AnalyticsContext = {
   recommendationBatchId: string | null;
 };
 
-type QueuedEvent = Record<string, unknown> & { event_id: string; event_name: AnalyticsEventName; attempts: number };
+type AnalyticsCollectionMode = "anonymous_only" | "authenticated" | "disabled";
+type QueuedEvent = Record<string, unknown> & {
+  event_id: string;
+  event_name: AnalyticsEventName;
+  attempts: number;
+  transport_authenticated: boolean;
+};
 
 const analyticsStorageKey = "storyverse.analytics.anonymous.v1";
 const analyticsSessionKey = "storyverse.analytics.session.v1";
@@ -50,6 +56,7 @@ let queue: QueuedEvent[] = [];
 let flushTimer: number | null = null;
 let flushing = false;
 let cachedAccessToken = "";
+let collectionMode: AnalyticsCollectionMode = "anonymous_only";
 
 export function analyticsDeviceType(width: number): DeviceType {
   if (width < 768) return "mobile";
@@ -141,6 +148,7 @@ function commonEvent(eventName: AnalyticsEventName, properties: AnalyticsPropert
     environment: analyticsEnvironment(),
     properties,
     attempts: 0,
+    transport_authenticated: collectionMode === "authenticated",
   };
 }
 
@@ -156,13 +164,17 @@ async function send(events: QueuedEvent[], keepalive = false) {
   const url = endpoint();
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
   if (!url || !publishableKey) return false;
-  const payload = JSON.stringify({ events: events.map(({ attempts: _attempts, ...event }) => event) });
+  const authenticated = events[0]?.transport_authenticated === true;
+  if (authenticated && !cachedAccessToken) return false;
+  const payload = JSON.stringify({
+    events: events.map(({ attempts: _attempts, transport_authenticated: _transport, ...event }) => event),
+  });
   const response = await fetch(url, {
     method: "POST",
     headers: {
       apikey: publishableKey,
       "Content-Type": "application/json",
-      ...(cachedAccessToken ? { Authorization: `Bearer ${cachedAccessToken}` } : {}),
+      ...(authenticated ? { Authorization: `Bearer ${cachedAccessToken}` } : {}),
     },
     body: payload,
     keepalive,
@@ -174,8 +186,10 @@ function takeBatch(keepalive: boolean) {
   const byteLimit = keepalive ? 60 * 1024 : 250 * 1024;
   const batch: QueuedEvent[] = [];
   let payloadBytes = 13;
+  const authenticated = queue[0]?.transport_authenticated;
   while (queue.length && batch.length < 20) {
     const candidate = queue[0];
+    if (candidate.transport_authenticated !== authenticated) break;
     const candidateBytes = new TextEncoder().encode(JSON.stringify(candidate)).byteLength + 1;
     if (batch.length && payloadBytes + candidateBytes > byteLimit) break;
     batch.push(queue.shift()!);
@@ -219,8 +233,9 @@ export function track(
   properties: AnalyticsProperties = {},
   options?: { immediate?: boolean },
 ) {
-  if (context.role === "admin") return "";
-  if (!cachedAccessToken && context.role !== "user" && !anonymousEventNames.has(eventName)) return "";
+  if (context.role === "admin" || collectionMode === "disabled") return "";
+  if (collectionMode === "anonymous_only" && !anonymousEventNames.has(eventName)) return "";
+  if (collectionMode === "authenticated" && context.role !== "user") return "";
   const event = commonEvent(eventName, properties);
   if (options?.immediate || eventName === "story_input_snapshot") void sendImmediate(event);
   else {
@@ -231,8 +246,9 @@ export function track(
 }
 
 export async function trackBeforeNavigation(eventName: AnalyticsEventName, properties: AnalyticsProperties = {}) {
-  if (context.role === "admin") return "";
-  if (!cachedAccessToken && context.role !== "user" && !anonymousEventNames.has(eventName)) return "";
+  if (context.role === "admin" || collectionMode === "disabled") return "";
+  if (collectionMode === "anonymous_only" && !anonymousEventNames.has(eventName)) return "";
+  if (collectionMode === "authenticated" && context.role !== "user") return "";
   const event = commonEvent(eventName, properties);
   for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -263,6 +279,18 @@ export function setAnalyticsPage(
 
 export function updateAnalyticsContext(values: Partial<Omit<AnalyticsContext, "pageViewId">>) {
   context = { ...context, ...values };
+}
+
+export function setAnalyticsCollectionMode(mode: AnalyticsCollectionMode) {
+  collectionMode = mode;
+  if (mode === "disabled") {
+    queue = queue.filter((event) => !event.transport_authenticated);
+    if (queue.length) scheduleFlush();
+  }
+}
+
+export function analyticsCollectionMode() {
+  return collectionMode;
 }
 
 export function createLobbyView(recommendationBatchId: string | null = null) {

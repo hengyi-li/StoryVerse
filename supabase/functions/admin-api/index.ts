@@ -2,6 +2,7 @@ import { analyzeStoryWithArk, arkModelInfo, createEmbedding } from "../_shared/a
 import { sha256 } from "../_shared/crypto.ts";
 import { ApiError, json, readJson, serve } from "../_shared/http.ts";
 import { normalizeDraftShape, storyContentHash } from "../_shared/story-data.ts";
+import { POSTTEST_ITEM_IDS } from "../_shared/posttest.ts";
 import { archiveQueueMessage, processStoryAnalysis } from "../_shared/story-pipeline.ts";
 import { generateSeedStoryImage, SEED_IMAGE_STYLES, type SeedImageStyle } from "../_shared/seed-image.ts";
 import { adminClient, requireAdmin } from "../_shared/supabase.ts";
@@ -134,6 +135,153 @@ async function analyticsQuery(admin: ReturnType<typeof adminClient>, input: Reco
   return data ?? {};
 }
 
+const pretestStatuses = new Set(["not_required", "not_started", "in_progress", "completed", "declined"]);
+
+async function pretestQuery(admin: ReturnType<typeof adminClient>, input: Record<string, unknown>) {
+  const account = String(input.account ?? "")
+    .trim()
+    .toLowerCase();
+  const status = String(input.status ?? "").trim();
+  const start = input.start ? new Date(String(input.start)) : null;
+  const end = input.end ? new Date(String(input.end)) : null;
+  if (status && !pretestStatuses.has(status)) {
+    throw new ApiError(400, "INVALID_PRETEST_STATUS", "前测状态筛选值不正确。");
+  }
+  if ((start && !Number.isFinite(start.getTime())) || (end && !Number.isFinite(end.getTime()))) {
+    throw new ApiError(400, "INVALID_PRETEST_DATE", "前测时间范围不正确。");
+  }
+  let query = admin
+    .from("profiles")
+    .select("id,username,display_name,role,pretest_required,created_at,pretest_responses(*)")
+    .eq("role", "user")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (account) query = query.ilike("username", `%${account.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? [])
+    .map((profile) => {
+      const nested = Array.isArray(profile.pretest_responses)
+        ? profile.pretest_responses[0]
+        : profile.pretest_responses;
+      const response = (nested ?? {}) as Record<string, unknown>;
+      const computedStatus =
+        profile.pretest_required === false ? "not_required" : response.status ? String(response.status) : "not_started";
+      return {
+        user_id: profile.id,
+        username: profile.username,
+        display_name: profile.display_name,
+        pretest_required: profile.pretest_required,
+        account_created_at: profile.created_at,
+        status: computedStatus,
+        current_step: response.current_step ?? (computedStatus === "not_started" ? 1 : null),
+        questionnaire_version: response.questionnaire_version ?? "pretest_v1",
+        consented: response.consented ?? null,
+        birth_year: response.birth_year ?? null,
+        gender: response.gender ?? null,
+        residence_region: response.residence_region ?? null,
+        country_region: response.country_region ?? null,
+        province: response.province ?? null,
+        city: response.city ?? null,
+        community_type: response.community_type ?? null,
+        ethnicity: response.ethnicity ?? null,
+        education: response.education ?? null,
+        education_other: response.education_other ?? null,
+        employment: response.employment ?? null,
+        industry_primary: response.industry_primary ?? null,
+        industry_secondary: response.industry_secondary ?? null,
+        discipline: response.discipline ?? null,
+        major: response.major ?? null,
+        consented_at: response.consented_at ?? null,
+        submitted_at: response.submitted_at ?? null,
+        declined_at: response.declined_at ?? null,
+        updated_at: response.updated_at ?? null,
+      };
+    })
+    .filter((row) => !status || row.status === status)
+    .filter((row) => {
+      const timestamp = row.submitted_at || row.declined_at || row.updated_at || row.account_created_at;
+      const time = new Date(String(timestamp)).getTime();
+      return (!start || time >= start.getTime()) && (!end || time <= end.getTime());
+    });
+}
+
+const posttestStatuses = new Set(["not_required", "not_started", "in_progress", "completed"]);
+
+async function posttestQuery(admin: ReturnType<typeof adminClient>, input: Record<string, unknown>) {
+  const account = String(input.account ?? "")
+    .trim()
+    .toLowerCase();
+  const status = String(input.status ?? "").trim();
+  const start = input.start ? new Date(String(input.start)) : null;
+  const end = input.end ? new Date(String(input.end)) : null;
+  if (status && !posttestStatuses.has(status)) {
+    throw new ApiError(400, "INVALID_POSTTEST_STATUS", "后测状态筛选值不正确。");
+  }
+  if ((start && !Number.isFinite(start.getTime())) || (end && !Number.isFinite(end.getTime()))) {
+    throw new ApiError(400, "INVALID_POSTTEST_DATE", "后测时间范围不正确。");
+  }
+  const { data, error } = await admin
+    .from("profiles")
+    .select(
+      "id,username,display_name,role,pretest_required,created_at,pretest_responses(status,questionnaire_version),posttest_responses(*)",
+    )
+    .eq("role", "user")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? [])
+    .map((profile) => {
+      const nestedPretest = Array.isArray(profile.pretest_responses)
+        ? profile.pretest_responses[0]
+        : profile.pretest_responses;
+      const nestedPosttest = Array.isArray(profile.posttest_responses)
+        ? profile.posttest_responses[0]
+        : profile.posttest_responses;
+      const pretest = (nestedPretest ?? {}) as Record<string, unknown>;
+      const response = (nestedPosttest ?? {}) as Record<string, unknown>;
+      const eligible =
+        profile.pretest_required === true &&
+        pretest.status === "completed" &&
+        pretest.questionnaire_version === "pretest_v1";
+      const computedStatus = eligible ? String(response.status ?? "not_started") : "not_required";
+      const answers =
+        response.answers && typeof response.answers === "object" && !Array.isArray(response.answers)
+          ? (response.answers as Record<string, unknown>)
+          : {};
+      return {
+        user_id: profile.id,
+        username: profile.username,
+        display_name: profile.display_name,
+        posttest_required: eligible,
+        account_created_at: profile.created_at,
+        status: computedStatus,
+        current_step: response.current_step ?? (computedStatus === "not_started" ? 1 : null),
+        questionnaire_version: response.questionnaire_version ?? "posttest_v1",
+        reminder_dismissed_at: response.reminder_dismissed_at ?? null,
+        submitted_at: response.submitted_at ?? null,
+        updated_at: response.updated_at ?? null,
+        ...Object.fromEntries(POSTTEST_ITEM_IDS.map((itemId) => [itemId, answers[itemId] ?? null])),
+      };
+    })
+    .filter(
+      (row) =>
+        !account ||
+        String(row.username ?? "")
+          .toLowerCase()
+          .includes(account) ||
+        String(row.display_name ?? "")
+          .toLowerCase()
+          .includes(account),
+    )
+    .filter((row) => !status || row.status === status)
+    .filter((row) => {
+      const timestamp = row.submitted_at || row.updated_at || row.account_created_at;
+      const time = new Date(String(timestamp)).getTime();
+      return (!start || time >= start.getTime()) && (!end || time <= end.getTime());
+    });
+}
+
 async function approveStory(admin: ReturnType<typeof adminClient>, story: Record<string, unknown>) {
   let typeId = String(story.final_type_id || story.ai_type_id || "");
   let themes =
@@ -201,6 +349,7 @@ async function seedProfile(admin: ReturnType<typeof adminClient>) {
     anonymous_number: 100,
     role: "user",
     status: "active",
+    pretest_required: false,
   });
   if (profileError) throw profileError;
   return data.user.id;
@@ -253,6 +402,38 @@ serve(async (request) => {
   if (action === "dashboard") return json(request, await dashboard(admin));
 
   if (action === "analytics-query") return json(request, { analytics: await analyticsQuery(admin, input) });
+
+  if (action === "pretest-query") return json(request, { responses: await pretestQuery(admin, input) });
+
+  if (action === "pretest-export") {
+    const responses = await pretestQuery(admin, input);
+    await audit(admin, user.id, action, "pretest_responses", "filtered_export", {
+      filters: {
+        account: String(input.account ?? ""),
+        status: String(input.status ?? ""),
+        start: String(input.start ?? ""),
+        end: String(input.end ?? ""),
+      },
+      rowCount: responses.length,
+    });
+    return json(request, { responses });
+  }
+
+  if (action === "posttest-query") return json(request, { responses: await posttestQuery(admin, input) });
+
+  if (action === "posttest-export") {
+    const responses = await posttestQuery(admin, input);
+    await audit(admin, user.id, action, "posttest_responses", "filtered_export", {
+      filters: {
+        account: String(input.account ?? ""),
+        status: String(input.status ?? ""),
+        start: String(input.start ?? ""),
+        end: String(input.end ?? ""),
+      },
+      rowCount: responses.length,
+    });
+    return json(request, { responses });
+  }
 
   if (action === "analytics-timeline") {
     const participantKey = String(input.participantKey ?? "").trim();

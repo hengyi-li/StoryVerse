@@ -32,7 +32,16 @@ type StoredAppState = Partial<
   tour?: { enabled?: boolean; seen?: string[] };
 };
 
-const validScreens: ScreenId[] = ["intro", "storyEditor", "resonance", "recommendations", "starLobby", "admin"];
+const validScreens: ScreenId[] = [
+  "intro",
+  "pretest",
+  "posttest",
+  "storyEditor",
+  "resonance",
+  "recommendations",
+  "starLobby",
+  "admin",
+];
 const validTourScenes: TourSceneId[] = ["starLobby", "guide", "collection", "confirm", "resonance"];
 
 function normalizeScreen(screen: string | undefined): ScreenId {

@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 const distDirectory = new URL("../dist/", import.meta.url);
 const routeNames = [
+  "PreTest",
+  "PostTest",
   "StoryStart",
   "StoryWrite",
   "StoryAnalyzing",

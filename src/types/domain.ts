@@ -5,10 +5,58 @@ export type StoryStatus =
   "draft" | "analyzing" | "pending_review" | "needs_confirmation" | "published" | "private" | "needs_edit" | "removed";
 export type Language = "zh" | "en";
 export type ThemeReviewStatus = "approved";
-export type ScreenId = "intro" | "storyEditor" | "resonance" | "recommendations" | "starLobby" | "admin";
+export type ScreenId =
+  "intro" | "pretest" | "posttest" | "storyEditor" | "resonance" | "recommendations" | "starLobby" | "admin";
 export type StoryEditorStep = 0 | 1 | 2 | 3;
 export type TourSceneId = "starLobby" | "guide" | "collection" | "confirm" | "resonance";
 export type ResonancePreferences = Record<"city" | "stage" | "theme", ResonanceMode>;
+export type PretestStatus = "not_required" | "not_started" | "in_progress" | "completed" | "declined";
+export type PretestStep = 1 | 2 | 3 | 4;
+
+export interface PretestAnswers {
+  consented: boolean;
+  birthYear: number | null;
+  gender: string;
+  residenceRegion: string;
+  countryRegion: string;
+  province: string;
+  city: string;
+  communityType: string;
+  ethnicity: string;
+  education: string;
+  educationOther: string;
+  employment: string;
+  industryPrimary: string;
+  industrySecondary: string;
+  discipline: string;
+  major: string;
+}
+
+export interface PretestProgress {
+  required: boolean;
+  status: PretestStatus;
+  currentStep: PretestStep;
+  questionnaireVersion: "pretest_v1";
+  draft: PretestAnswers | null;
+  consentedAt?: string | null;
+  submittedAt?: string | null;
+  declinedAt?: string | null;
+}
+
+export type PosttestStatus = "not_required" | "not_started" | "in_progress" | "completed";
+export type PosttestStep = 1 | 2 | 3 | 4 | 5;
+export type PosttestScore = 1 | 2 | 3 | 4 | 5;
+export type PosttestAnswers = Record<string, PosttestScore>;
+
+export interface PosttestProgress {
+  required: boolean;
+  status: PosttestStatus;
+  currentStep: PosttestStep;
+  questionnaireVersion: "posttest_v1";
+  answers: PosttestAnswers;
+  reminderDismissedAt: string | null;
+  submittedAt: string | null;
+}
 
 export interface StoryEmotionTag {
   value: string;
@@ -206,6 +254,7 @@ export interface UserProfile {
   anonymousNumber: number;
   role: "user" | "admin";
   status: "active" | "suspended";
+  pretestRequired: boolean;
 }
 
 export interface AppState {

@@ -57,9 +57,18 @@
 | `pasted_texts`                         | 输入快照  | 本次创作会话所有粘贴文本                                           |
 | `ai_type_id` / `final_type_id`         | 标签修改  | AI 与用户最终类型                                                  |
 | `ai_themes` / `final_themes`           | 标签修改  | AI 与用户最终主题                                                  |
+| `questionnaire_version`                | 问卷事件  | `pretest_v1` 或 `posttest_v1`；不包含具体答案或分值                |
+| `step`                                 | 问卷事件  | 前测 1–4；后测 1–5                                                 |
+| `fields`                               | 前测校验  | 未通过的字段名数组，不含字段值                                     |
+| `error_count`                          | 前测校验  | 当前校验错误数量                                                   |
+| `answer_count` / `answered_count`      | 后测事件  | 已回答的题目数量，不包含题号与具体分值                             |
+| `missing_count`                        | 后测校验  | 当前部分未回答题数，不包含具体题号                                 |
+| `status`                               | 后测入口  | `not_started` / `in_progress` / `completed`                        |
 
 ## 3. 明确禁止
 
 Edge Function 会递归拒绝键名包含以下敏感信息的事件：密码、确认密码、密保答案、Access/Refresh Token、Authorization、Cookie、API Key、secret、音频或录音。完整 IP 不入库；匿名限流仅保存 IP 与匿名 ID 的 HMAC 指纹。
 
 本实验允许明文采集故事标题、正文、粘贴文本和搜索词。它们只保存在受管理员权限保护的 `properties` 中。
+
+前测人口统计答案和后测题目分值是例外：分别只写入 `pretest_responses` 与 `posttest_responses`，不得复制到 `analytics_events.properties`。

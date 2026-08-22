@@ -104,6 +104,16 @@ describe("新用户进入路径", () => {
     expect(isStoryEditorRoute("/StarLobby")).toBe(false);
   });
 
+  it("前测路由可以直接访问并由认证门禁决定是否放行", () => {
+    expect(routePatchFromPath("/PreTest").screen).toBe("pretest");
+  });
+
+  it("后测路由存在，但没有完成第一篇故事时不能提前填写", () => {
+    expect(routePatchFromPath("/PostTest").screen).toBe("posttest");
+    expect(guardPostPublishScreenForFirstStory("posttest", false)).toBe("storyEditor");
+    expect(guardPostPublishScreenForFirstStory("posttest", true)).toBe("posttest");
+  });
+
   it("腾讯云根路径部署不再兼容 GitHub Pages 的 /StoryVerse 前缀", () => {
     expect(routePatchFromPath("/StoryVerse/StarLobby").screen).toBe("intro");
     expect(routePatchFromPath("/StarLobby").screen).toBe("starLobby");

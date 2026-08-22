@@ -83,6 +83,19 @@ export const analyticsEventPriorities = {
   feedback_submitted: "P2",
   notifications_opened: "P2",
   logout_clicked: "P2",
+  pretest_consent_agreed: "P2",
+  pretest_step_viewed: "P2",
+  pretest_validation_blocked: "P2",
+  pretest_step_saved: "P2",
+  pretest_submitted: "P2",
+  posttest_reminder_shown: "P2",
+  posttest_reminder_dismissed: "P2",
+  posttest_entry_clicked: "P2",
+  posttest_step_viewed: "P2",
+  posttest_validation_blocked: "P2",
+  posttest_step_saved: "P2",
+  posttest_submitted: "P2",
+  posttest_completed_button_clicked: "P2",
 } as const satisfies Record<string, AnalyticsPriority>;
 
 export type AnalyticsEventName = keyof typeof analyticsEventPriorities;

@@ -26,6 +26,8 @@ active_duration_ms >= 20000
 | ---- | -------------- | ------------------------------------------------------- |
 | 获客 | 首页访问用户   | `home_viewed` 参与者去重                                |
 | 获客 | 注册成功率     | 注册成功 `auth_result` / 注册 `auth_attempted`          |
+| 前测 | 前测同意率     | `pretest_consent_agreed` / 迁移后新注册普通账号         |
+| 前测 | 前测完成率     | `pretest_submitted` / `pretest_consent_agreed`          |
 | 激活 | 首次故事完成率 | 首次成功 `story_submit_result` / 注册成功用户           |
 | 创作 | 有效输入时长   | `story_input_snapshot.title_active_ms + body_active_ms` |
 | 创作 | 正文粘贴率     | `was_pasted=true` 的快照会话 / 全部快照会话             |
@@ -37,6 +39,8 @@ active_duration_ms >= 20000
 | 阅读 | 有效阅读率     | `meaningful_read=true` / 全部 `story_read_ended`        |
 | 共鸣 | 偏好修改率     | 有变化的共鸣确认 / 共鸣设置曝光                         |
 | 引导 | 引导完成率     | `tour_completed` / `tour_started`                       |
+| 后测 | 后测进入率     | `posttest_entry_clicked` 用户 / 需要后测且看到提醒用户  |
+| 后测 | 后测完成率     | `posttest_submitted` 用户 / 需要后测的参与者            |
 | 留存 | 次日、7 日留存 | 首次激活 cohort 后第 1/7 天再次出现行为事件             |
 
 星点曝光唯一键：
@@ -52,6 +56,8 @@ lobby_view_id + story_id + view_mode
 - `P0`：核心创作、星点、搜索、阅读、反应和大厅共鸣行为。
 - `P1`：首页、Icebreaker、AI 整理、标签修改、发布、首次共鸣和引导漏斗。
 - `P2`：其余完整旅程与系统诊断事件。
+
+前测人口统计答案和后测 41 道题的具体分值都不进入 `analytics_events`。新账号在点击同意前只发送匿名主页与认证事件；同意后才启用登录态产品埋点。
 
 数据库与代码只允许 `P0`、`P1`、`P2`；不再使用 `P000`。
 

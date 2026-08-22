@@ -27,6 +27,8 @@ if (indexHtml.includes("/StoryVerse/")) fail("index.html still contains the GitH
 if (!/["']\/assets\//.test(indexHtml)) fail("index.html does not reference root-level hashed assets.");
 
 const expectedRouteNames = [
+  "PreTest",
+  "PostTest",
   "StoryStart",
   "StoryWrite",
   "StoryAnalyzing",
