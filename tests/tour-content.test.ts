@@ -8,6 +8,13 @@ describe("StarLobby 新手引导文案", () => {
     expect(skyGuide.zh.body).not.toContain("颜色 —— 对应故事的主题");
     expect(skyGuide.en.body).toContain("Colour — different story types");
   });
+
+  it("不再引导已经删除的写故事加号", () => {
+    const steps = getScene("starLobby").steps;
+    expect(steps).toHaveLength(8);
+    expect(steps.some((step) => step.target === "[data-tour='nav-write']")).toBe(false);
+    expect(steps.at(-1)?.target).toBe("[data-tour='account-dock']");
+  });
 });
 
 describe("StoryPage 新手引导文案", () => {

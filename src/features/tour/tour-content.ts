@@ -113,18 +113,6 @@ const scenes: Record<TourSceneId, TourScene> = {
         en: { title: "Liked", body: "When a story lands, hit like — it'll be waiting here for you." },
       },
       {
-        target: "[data-tour='nav-write']",
-        placement: "top",
-        zh: {
-          title: "还想再写一个？",
-          body: "这颗「＋」随时在。想到什么就回来写，不用等到「值得记录」的那天。",
-        },
-        en: {
-          title: "Want to write another?",
-          body: "That “+” is always here. Come back whenever something surfaces — no need to wait for a story that feels “worth it”.",
-        },
-      },
-      {
         target: "[data-tour='account-dock']",
         placement: "right",
         zh: {
