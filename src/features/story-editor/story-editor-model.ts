@@ -75,6 +75,7 @@ export const peopleOptions = [
   { value: "陌生人", en: "A stranger" },
   { value: "老师", en: "A teacher" },
   { value: "同事", en: "A colleague" },
+  { value: "宠物/动物", en: "Pet / Animal" },
   { value: "其他", en: "Other" },
 ];
 export const stageOptions = [

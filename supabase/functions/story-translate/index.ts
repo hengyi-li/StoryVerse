@@ -1,9 +1,17 @@
-import { arkModelInfo, translateStoriesWithArk, type StoryTranslationInput } from "../_shared/ark.ts";
+import {
+  arkModelInfo,
+  translateStoriesWithArk,
+  type StoryTranslationInput,
+  type StoryTranslationLanguage,
+} from "../_shared/ark.ts";
 import { sha256 } from "../_shared/crypto.ts";
 import { ApiError, json, readJson, serve } from "../_shared/http.ts";
 import { adminClient, requireUser } from "../_shared/supabase.ts";
 
-const PROMPT_VERSION = "storyverse-story-translation-v1";
+const PROMPT_VERSIONS: Record<StoryTranslationLanguage, string> = {
+  en: "storyverse-story-translation-v1",
+  zh: "storyverse-story-translation-v2",
+};
 
 type StoryRow = Record<string, unknown> & { id: string };
 
@@ -30,9 +38,11 @@ serve(async (request) => {
   if (request.method !== "POST") throw new ApiError(405, "METHOD_NOT_ALLOWED", "不支持这个请求方式。");
   const { client } = await requireUser(request);
   const input = await readJson<{ storyIds?: unknown; targetLanguage?: unknown }>(request);
-  if (input.targetLanguage !== "en") {
-    throw new ApiError(400, "INVALID_TARGET_LANGUAGE", "目前只支持翻译为英文。");
+  if (input.targetLanguage !== "en" && input.targetLanguage !== "zh") {
+    throw new ApiError(400, "INVALID_TARGET_LANGUAGE", "目标语言必须是中文或英文。");
   }
+  const targetLanguage = input.targetLanguage as StoryTranslationLanguage;
+  const promptVersion = PROMPT_VERSIONS[targetLanguage];
   const storyIds = Array.isArray(input.storyIds)
     ? [
         ...new Set(
@@ -66,22 +76,22 @@ serve(async (request) => {
     .from("story_translations")
     .select("*")
     .in("story_id", storyIds)
-    .eq("target_language", "en");
+    .eq("target_language", targetLanguage);
   if (cacheError) throw cacheError;
   const cached = new Map((cachedRows ?? []).map((row) => [String(row.story_id), row]));
   const missing = sources.filter((source) => {
     const row = cached.get(source.id);
     return (
-      !row || row.source_hash !== hashes.get(source.id) || row.model !== model || row.prompt_version !== PROMPT_VERSION
+      !row || row.source_hash !== hashes.get(source.id) || row.model !== model || row.prompt_version !== promptVersion
     );
   });
 
   if (missing.length) {
-    const translated = await translateStoriesWithArk(missing);
+    const translated = await translateStoriesWithArk(missing, targetLanguage);
     const { error: saveError } = await admin.from("story_translations").upsert(
       translated.map((story) => ({
         story_id: story.id,
-        target_language: "en",
+        target_language: targetLanguage,
         source_hash: hashes.get(story.id),
         title: story.title,
         excerpt: story.excerpt,
@@ -92,7 +102,7 @@ serve(async (request) => {
         people: story.people,
         city: story.city,
         model,
-        prompt_version: PROMPT_VERSION,
+        prompt_version: promptVersion,
       })),
       { onConflict: "story_id,target_language" },
     );
@@ -103,11 +113,11 @@ serve(async (request) => {
     .from("story_translations")
     .select("story_id,title,excerpt,body,themes,mood,life_stage,people,city,updated_at")
     .in("story_id", storyIds)
-    .eq("target_language", "en");
+    .eq("target_language", targetLanguage);
   if (resultError) throw resultError;
   const cityNames = new Map((visibleRows ?? []).map((row) => [String(row.id), String(row.city_name_en ?? "")]));
   return json(request, {
-    targetLanguage: "en",
+    targetLanguage,
     translations: Object.fromEntries(
       (translations ?? []).map((row) => [
         row.story_id,
@@ -119,7 +129,7 @@ serve(async (request) => {
           emotion: row.mood,
           stage: row.life_stage,
           people: row.people,
-          city: cityNames.get(String(row.story_id)) || row.city || undefined,
+          city: targetLanguage === "en" ? cityNames.get(String(row.story_id)) || row.city || undefined : row.city,
           translatedAt: row.updated_at,
         },
       ]),

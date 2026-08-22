@@ -3,8 +3,12 @@ import {
   authenticatedEntryScreen,
   guardBlankEditorAfterSubmission,
   guardPostPublishScreenForFirstStory,
+  isStoryEditorRoute,
+  pickStoryForDirectStoryPage,
+  safeDirectStoryEditorStep,
   shouldAutosaveDraft,
   storyEditorStepForProgress,
+  routePatchFromPath,
 } from "../src/app/routes";
 
 describe("新用户进入路径", () => {
@@ -71,6 +75,15 @@ describe("新用户进入路径", () => {
       guardBlankEditorAfterSubmission({
         screen: "storyEditor",
         hasSubmittedStory: true,
+        hasDraftContent: false,
+        hasStoryProgress: false,
+        allowDirectStoryRoute: true,
+      }),
+    ).toBe("storyEditor");
+    expect(
+      guardBlankEditorAfterSubmission({
+        screen: "storyEditor",
+        hasSubmittedStory: true,
         hasDraftContent: true,
         hasStoryProgress: false,
       }),
@@ -83,5 +96,50 @@ describe("新用户进入路径", () => {
         hasStoryProgress: true,
       }),
     ).toBe("storyEditor");
+  });
+
+  it("已登录用户直接输入故事流程 URL 时保留页面意图", () => {
+    expect(isStoryEditorRoute("/StoryStart")).toBe(true);
+    expect(isStoryEditorRoute("/StoryWrite")).toBe(true);
+    expect(isStoryEditorRoute("/StarLobby")).toBe(false);
+  });
+
+  it("腾讯云根路径部署不再兼容 GitHub Pages 的 /StoryVerse 前缀", () => {
+    expect(routePatchFromPath("/StoryVerse/StarLobby").screen).toBe("intro");
+    expect(routePatchFromPath("/StarLobby").screen).toBe("starLobby");
+  });
+
+  it("直接打开依赖 AI 结果的页面时，缺少数据会安全回退", () => {
+    expect(safeDirectStoryEditorStep({ requestedStep: 2, hasDraftContent: true, hasAnalysis: false })).toBe(1);
+    expect(safeDirectStoryEditorStep({ requestedStep: 3, hasDraftContent: false, hasAnalysis: false })).toBe(0);
+    expect(safeDirectStoryEditorStep({ requestedStep: 3, hasDraftContent: true, hasAnalysis: true })).toBe(3);
+  });
+
+  it("老账号直接打开 StoryPage 时选择最近一篇已提交故事", () => {
+    const baseStory = {
+      title: "",
+      excerpt: "",
+      body: "",
+      author: "",
+      city: "",
+      stage: "",
+      theme: "",
+      emotion: "",
+      meaning: "",
+      perspective: "",
+      people: [],
+      readMinutes: 1,
+      visualStatus: "none" as const,
+      x: 0,
+      y: 0,
+    };
+    const stories = [
+      { ...baseStory, id: "draft-story", status: "draft" as const },
+      { ...baseStory, id: "published-story", status: "published" as const },
+      { ...baseStory, id: "older-story", status: "private" as const },
+    ];
+
+    expect(pickStoryForDirectStoryPage(stories)?.id).toBe("published-story");
+    expect(pickStoryForDirectStoryPage([])).toBeNull();
   });
 });

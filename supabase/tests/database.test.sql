@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(58);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'stories', 'stories table exists');
@@ -72,6 +72,20 @@ insert into public.stories (
   '私密用户', '不公开故事', repeat('字', 100), '平和自足', '成年早期', 30, '女', '原点城',
   0, 0, array['自己'], 'private', 'pass', 'career_achievement', array['职业成长', '自我肯定'],
   'private-hash', null
+);
+
+insert into public.story_translations (
+  story_id, target_language, source_hash, title, excerpt, body, themes, mood, life_stage, people, model, prompt_version
+) values (
+  '10000000-0000-0000-0000-000000000000', 'zh', 'translation-source-hash', '参照故事', '中文摘要',
+  repeat('中文译文', 25), array['职业成长', '自我肯定'], '平和自足', '成年早期', array['自己'],
+  'test-model', 'test-prompt-v2'
+);
+
+select is(
+  (select target_language from public.story_translations where story_id = '10000000-0000-0000-0000-000000000000'),
+  'zh',
+  'story translation cache accepts Simplified Chinese targets'
 );
 
 select throws_ok(

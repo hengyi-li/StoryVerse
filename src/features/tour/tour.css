@@ -185,6 +185,16 @@
 @media (max-width: 680px) {
   .tour-card {
     width: calc(100vw - 28px);
+    max-height: calc(100dvh - 24px);
+    padding: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .tour-back,
+  .tour-next,
+  .tour-skip {
+    min-height: 44px;
   }
 }
 

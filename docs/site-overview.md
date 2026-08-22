@@ -183,7 +183,7 @@ mood,people,source_note,skip_moderation
 
 ## 9. 路由和状态
 
-项目没有引入 React Router；`src/app/routes.ts` 维护路径与 `AppState` 的映射，并用 History API 同步前进/后退。GitHub Pages 构建会复制 `index.html` 为 `404.html` 处理深层路径。
+项目没有引入 React Router；`src/app/routes.ts` 维护根路径下的 URL 与 `AppState` 映射，并用 History API 同步前进/后退。腾讯云 CloudBase 将 SPA 错误文档配置为 `index.html`，因此深层路径刷新仍返回应用入口，不再保留 `/StoryVerse/` 子路径兼容。
 
 应用级 React 状态只负责当前页面、草稿编辑副本、语言、引导、反应和通知展示。真实会话每次刷新都从 Supabase Auth 恢复，管理员角色不会写入可伪造的持久化状态。
 

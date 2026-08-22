@@ -4,6 +4,7 @@ import {
   getMissingRequiredStoryFields,
   imageStyleOptions,
   isStoryBodyLengthValid,
+  peopleOptions,
   stageOptions,
   STORY_BODY_MAX_LENGTH,
   STORY_BODY_MIN_LENGTH,
@@ -50,5 +51,9 @@ describe("故事编辑字段规则", () => {
 
   it("图片风格只保留三个指定选项", () => {
     expect(imageStyleOptions.map((option) => option.id)).toEqual(["clay-3d", "indie-zine", "retro-collage"]);
+  });
+
+  it("故事人物可以选择宠物或动物", () => {
+    expect(peopleOptions).toContainEqual({ value: "宠物/动物", en: "Pet / Animal" });
   });
 });

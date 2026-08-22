@@ -5,7 +5,7 @@
 StoryVerse 使用“静态前端 + Supabase 后端 + 火山方舟 AI”的结构：
 
 ```text
-GitHub Pages / 本地 Vite
+腾讯云 CloudBase / 本地 Vite
         │ Publishable Key + 用户 JWT
         ▼
 Supabase Auth ── Edge Functions ── 火山方舟 / Open-Meteo / IPWhois
@@ -17,7 +17,8 @@ Supabase Auth ── Edge Functions ── 火山方舟 / Open-Meteo / IPWhois
 
 - 浏览器不持有 Service Role、数据库密码或 AI Key。
 - 普通数据查询受 RLS 限制；需要特权、AI 或第三方网络调用的操作统一进入 Edge Functions。
-- GitHub Pages 只发布 `dist/` 静态文件，不承担后端职责。
+- CloudBase 只发布 `dist/` 静态文件并提供大陆 CDN、HTTPS 与 SPA 路由，不承担后端职责。
+- GitHub `main` 通过 CloudBase Git 仓库部署自动发布；构建必须先通过 Vitest、TypeScript 和产物密钥扫描。
 - `localStorage` 只保存语言、页面和引导等界面偏好；IndexedDB 只保存异常恢复草稿。账号和正式故事不落在浏览器假数据库中。
 
 ## 2. 前端分层
@@ -148,6 +149,7 @@ npm test
 npm run db:reset
 npm run db:test
 npm run build
+npm run build:cloudbase
 npm run format:check
 ```
 

@@ -19,7 +19,11 @@ import {
   termsUrl,
 } from "./gateway-content";
 import { styles } from "./gateway-styles";
-import { getPasswordConfirmationState, isValidAccountIdentifier } from "./gateway-validation";
+import {
+  getAccountIdentifierValidationIssue,
+  getPasswordConfirmationState,
+  type AccountIdentifierValidationIssue,
+} from "./gateway-validation";
 
 const PORTAL_BG = generatedPortalBg;
 
@@ -28,6 +32,16 @@ const securityQuestions = [
   { value: "childhood_place", zh: "你童年最熟悉的地方叫什么？", en: "What place do you remember most from childhood?" },
   { value: "first_pet", zh: "你的第一个宠物叫什么？", en: "What was the name of your first pet?" },
 ] as const;
+
+function getAccountIdentifierFeedback(
+  issue: Exclude<AccountIdentifierValidationIssue, null>,
+  copy: (typeof gatewayCopy)[Language],
+) {
+  if (issue === "required") return copy.accountRequired;
+  if (issue === "too_short") return copy.accountTooShort;
+  if (issue === "too_long") return copy.accountTooLong;
+  return copy.accountInvalidCharacters;
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -52,7 +66,7 @@ function Wordmark({
   onClick?: () => void;
   ariaLabel?: string;
 }) {
-  const content = <BrandLogo inverted style={{ width: isMobile ? 144 : 180 }} />;
+  const content = <BrandLogo inverted style={{ width: isMobile ? 100 : 180 }} />;
   if (onClick) {
     return (
       <button
@@ -176,6 +190,22 @@ function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: 
 
         const abs = Math.abs(pos);
         const isCenter = pos === 0;
+        const quoteFontSize =
+          language === "zh"
+            ? isMobile
+              ? quote.length > 160
+                ? 12
+                : 13
+              : quote.length > 160
+                ? 13
+                : 14
+            : isMobile
+              ? quote.length > 500
+                ? 11
+                : 12
+              : quote.length > 500
+                ? 12
+                : 13;
         const opacity = isCenter ? 1 : Math.max(0, 0.6 - (abs - 1) * 0.2);
         const transform = `translateX(${pos * stepX}px) translateY(${
           abs * dropY + (isCenter ? centerBump : 0)
@@ -188,6 +218,7 @@ function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: 
               ...styles.arcCard,
               width: cardW,
               height: cardH,
+              padding: isMobile ? 22 : 26,
               borderRadius: isMobile ? 22 : 28,
               opacity,
               zIndex: 100 - abs,
@@ -202,6 +233,7 @@ function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: 
                 : "inset 0 1px 1px rgba(255,255,255,0.45)",
               backdropFilter: isCenter ? "none" : "blur(18px) saturate(140%)",
               WebkitBackdropFilter: isCenter ? "none" : "blur(18px) saturate(140%)",
+              overflow: "hidden",
               cursor: isCenter ? "default" : "pointer",
             }}
             onClick={() => setActive(index)}
@@ -210,7 +242,13 @@ function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: 
               style={{
                 ...styles.quote,
                 color: isCenter ? "#2c2420" : "rgba(255,255,255,0.85)",
-                fontSize: isMobile ? 15 : 17,
+                width: "100%",
+                maxHeight: "100%",
+                overflowY: "auto",
+                overscrollBehavior: "contain",
+                scrollbarWidth: "thin",
+                whiteSpace: "pre-line",
+                fontSize: quoteFontSize,
               }}
             >
               “{quote}”
@@ -426,9 +464,9 @@ export function Gateway({
         </div>
       </div>
 
-      <nav style={{ ...styles.nav, padding: isMobile ? "18px 20px" : "26px 40px" }}>
+      <nav className="gateway-responsive-nav" style={{ ...styles.nav, padding: isMobile ? "14px 12px" : "26px 40px" }}>
         <Wordmark isMobile={isMobile} onClick={onHome} ariaLabel={t.homeAria} />
-        <div style={styles.navActions}>
+        <div className="gateway-responsive-nav-actions" style={{ ...styles.navActions, gap: isMobile ? 6 : 14 }}>
           <button
             type="button"
             className="neon-control theme-button"
@@ -443,7 +481,7 @@ export function Gateway({
                 ref={skipRef}
                 type="button"
                 className="neon-control gateway-skip-control"
-                style={{ ...styles.watchDemo, padding: isMobile ? "9px 16px" : "11px 22px" }}
+                style={{ ...styles.watchDemo, padding: isMobile ? "8px 10px" : "11px 22px" }}
                 onClick={() => goToSection("auth")}
               >
                 {t.skip}
@@ -611,10 +649,11 @@ function Footer({ isMobile, language }: { isMobile: boolean; language: Language 
       </div>
       {guideOpen && (
         <div
+          className="gateway-modal-backdrop"
           style={styles.gatewayModalBackdrop}
           onMouseDown={(event) => event.target === event.currentTarget && setGuideOpen(false)}
         >
-          <div style={styles.gatewayModal}>
+          <div className="gateway-modal" style={styles.gatewayModal}>
             <button type="button" style={styles.gatewayModalClose} onClick={() => setGuideOpen(false)}>
               ×
             </button>
@@ -661,9 +700,17 @@ function ImmersiveLogin({
   const [submitting, setSubmitting] = useState(false);
   const [authError, setAuthError] = useState("");
   const [accountError, setAccountError] = useState("");
+  const [accountTouched, setAccountTouched] = useState(false);
   const passwordConfirmationState = getPasswordConfirmationState(password, passwordConfirmation);
+  const accountValidationIssue = getAccountIdentifierValidationIssue(accountIdentifier);
+  const t = gatewayCopy[language];
+  const accountFormatError =
+    accountValidationIssue && (accountTouched || accountIdentifier.length > 0)
+      ? getAccountIdentifierFeedback(accountValidationIssue, t)
+      : "";
+  const accountFeedback = accountError || accountFormatError;
   const valid =
-    isValidAccountIdentifier(accountIdentifier) &&
+    accountValidationIssue === null &&
     password.length >= 10 &&
     password.length <= 72 &&
     (mode === "login" ||
@@ -671,7 +718,6 @@ function ImmersiveLogin({
         passwordConfirmationState === "match" &&
         Boolean(securityQuestion) &&
         securityAnswer.trim().length >= 2));
-  const t = gatewayCopy[language];
   const changeMode = (nextMode: AuthMode) => {
     setAuthError("");
     setAccountError("");
@@ -712,6 +758,7 @@ function ImmersiveLogin({
   return (
     <section
       id="storyverse-auth"
+      className="gateway-login-section"
       ref={authRef}
       style={{ ...styles.loginSection, padding: isMobile ? "92px 22px 40px" : "132px 44px 36px" }}
     >
@@ -722,7 +769,15 @@ function ImmersiveLogin({
           minHeight: isMobile ? "auto" : "min(720px,78vh)",
         }}
       >
-        <div style={styles.loginCopy}>
+        <div
+          className="gateway-login-copy"
+          style={{
+            ...styles.loginCopy,
+            minHeight: isMobile ? 280 : styles.loginCopy.minHeight,
+            padding: isMobile ? "30px 24px" : styles.loginCopy.padding,
+            borderRadius: isMobile ? 26 : styles.loginCopy.borderRadius,
+          }}
+        >
           <p style={styles.loginEyebrow}>{t.loginEyebrow}</p>
           <h2 style={{ ...styles.loginTitle, fontSize: isMobile ? 44 : 72 }}>
             <span style={styles.welcomeLight}>{t.welcome}</span>
@@ -731,7 +786,14 @@ function ImmersiveLogin({
             </span>
           </h2>
         </div>
-        <div style={styles.authCard}>
+        <div
+          className="gateway-auth-card-responsive"
+          style={{
+            ...styles.authCard,
+            padding: isMobile ? "22px 18px 24px" : styles.authCard.padding,
+            borderRadius: isMobile ? 26 : styles.authCard.borderRadius,
+          }}
+        >
           <div style={styles.segmented}>
             <button
               style={{
@@ -769,21 +831,25 @@ function ImmersiveLogin({
           <label style={styles.fieldLabel}>
             {t.accountIdentifier}
             <input
-              style={styles.inputShell}
+              style={{
+                ...styles.inputShell,
+                borderColor: accountFeedback ? "rgba(255, 118, 103, 0.95)" : styles.inputShell.borderColor,
+              }}
               value={accountIdentifier}
               onChange={(event) => {
                 setAccountIdentifier(event.target.value);
                 setAccountError("");
               }}
+              onBlur={() => setAccountTouched(true)}
               type="text"
               inputMode="text"
               placeholder={t.accountIdentifierPlaceholder}
-              aria-invalid={Boolean(accountError)}
-              aria-describedby={accountError ? "signup-account-error" : undefined}
+              aria-invalid={Boolean(accountFeedback)}
+              aria-describedby={accountFeedback ? "auth-account-error" : undefined}
             />
-            {accountError && (
-              <small id="signup-account-error" role="alert" style={{ ...styles.fieldFeedback, color: "#ffe1dc" }}>
-                {accountError}
+            {accountFeedback && (
+              <small id="auth-account-error" role="alert" style={{ ...styles.fieldFeedback, color: "#ffe1dc" }}>
+                {accountFeedback}
               </small>
             )}
           </label>
@@ -935,9 +1001,15 @@ function PasswordResetDialog({ language, onClose }: { language: Language; onClos
   const [securityAnswer, setSecurityAnswer] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [accountTouched, setAccountTouched] = useState(false);
   const passwordConfirmationState = getPasswordConfirmationState(password, confirm);
+  const accountValidationIssue = getAccountIdentifierValidationIssue(account);
+  const accountFeedback =
+    accountValidationIssue && (accountTouched || account.length > 0)
+      ? getAccountIdentifierFeedback(accountValidationIssue, t)
+      : "";
   const canSubmit =
-    isValidAccountIdentifier(account) &&
+    accountValidationIssue === null &&
     password.length >= 10 &&
     password.length <= 72 &&
     passwordConfirmationState === "match" &&
@@ -945,8 +1017,12 @@ function PasswordResetDialog({ language, onClose }: { language: Language; onClos
     securityAnswer.trim().length >= 2;
 
   return (
-    <div style={styles.gatewayModalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div style={{ ...styles.gatewayModal, ...styles.resetModal }}>
+    <div
+      className="gateway-modal-backdrop"
+      style={styles.gatewayModalBackdrop}
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div className="gateway-modal gateway-reset-modal" style={{ ...styles.gatewayModal, ...styles.resetModal }}>
         <button type="button" style={styles.gatewayModalClose} onClick={onClose}>
           ×
         </button>
@@ -958,11 +1034,22 @@ function PasswordResetDialog({ language, onClose }: { language: Language; onClos
             <label style={styles.resetLabel}>
               {t.resetAccount}
               <input
-                style={styles.resetInput}
+                style={{
+                  ...styles.resetInput,
+                  borderColor: accountFeedback ? "rgba(255, 118, 103, 0.95)" : styles.resetInput.borderColor,
+                }}
                 value={account}
                 onChange={(event) => setAccount(event.target.value)}
+                onBlur={() => setAccountTouched(true)}
                 placeholder={t.accountIdentifierPlaceholder}
+                aria-invalid={Boolean(accountFeedback)}
+                aria-describedby={accountFeedback ? "reset-account-error" : undefined}
               />
+              {accountFeedback && (
+                <small id="reset-account-error" role="alert" style={{ ...styles.fieldFeedback, color: "#ffe1dc" }}>
+                  {accountFeedback}
+                </small>
+              )}
             </label>
             <label style={styles.resetLabel}>
               {t.resetPassword}

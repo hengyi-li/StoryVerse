@@ -1,4 +1,4 @@
-import { ApiError, json, readJson, serve } from "../_shared/http.ts";
+import { ApiError, isAllowedOrigin, json, readJson, serve } from "../_shared/http.ts";
 import { adminClient } from "../_shared/supabase.ts";
 
 type AnalyticsPriority = "P0" | "P1" | "P2";
@@ -105,18 +105,6 @@ const forbiddenKey =
   /(^|_)(password|password_confirmation|security_answer|access_token|refresh_token|authorization|cookie|api_key|secret|audio|recording)($|_)/i;
 const encoder = new TextEncoder();
 
-function configuredOrigins() {
-  return new Set([
-    "http://127.0.0.1:4173",
-    "http://localhost:4173",
-    "https://chelsealeezc.github.io",
-    ...(Deno.env.get("FRONTEND_ORIGINS") ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-  ]);
-}
-
 function assertNoForbiddenKeys(value: unknown, path = "properties") {
   if (!value || typeof value !== "object") return;
   if (Array.isArray(value)) {
@@ -158,8 +146,7 @@ async function hmac(value: string) {
 serve(async (request) => {
   if (request.method !== "POST") throw new ApiError(405, "METHOD_NOT_ALLOWED", "不支持这个请求方式。");
   const origin = request.headers.get("origin");
-  if (origin && !configuredOrigins().has(origin))
-    throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在允许列表中。");
+  if (origin && !isAllowedOrigin(origin)) throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在允许列表中。");
   const declaredSize = Number(request.headers.get("content-length") ?? 0);
   if (declaredSize > 256 * 1024) throw new ApiError(413, "ANALYTICS_BATCH_TOO_LARGE", "埋点批次过大。");
 

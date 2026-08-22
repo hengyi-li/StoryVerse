@@ -10,6 +10,7 @@ describe("管理员入口隔离", () => {
   });
 
   it("管理员仍可通过独立的 /Admin 地址进入", () => {
-    expect(routePatchFromPath("/StoryVerse/Admin").screen).toBe("admin");
+    expect(routePatchFromPath("/Admin").screen).toBe("admin");
+    expect(routePatchFromPath("/StoryVerse/Admin").screen).toBe("intro");
   });
 });

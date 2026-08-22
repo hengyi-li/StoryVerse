@@ -1,6 +1,17 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { analyzeStoryWithArk, arkModelInfo, createEmbedding, type ModerationCategory } from "./ark.ts";
+import {
+  analyzeStoryWithArk,
+  arkModelInfo,
+  createEmbedding,
+  type ModerationCategory,
+  type StoryAiResult,
+} from "./ark.ts";
 import { sha256 } from "./crypto.ts";
+import {
+  createStoryAnalysisFallback,
+  STORY_ANALYSIS_FAIL_OPEN_VERSION,
+  type StoryAnalysisFallback,
+} from "./story-analysis-fallback.ts";
 import { storyContentHash } from "./story-data.ts";
 import type { StoryTypeId } from "./story-types.ts";
 
@@ -100,7 +111,7 @@ async function createReviewCase(
       story_title: story.title || story.ai_suggested_title || "未命名故事",
       reason: categories.includes("crisis")
         ? "我们注意到这段经历可能很艰难。可以先缓一缓，你的安全和感受更重要。故事已经保存，正在等待内容确认。"
-        : "故事已经保存，正在等待内容确认；确认完成前不会公开。",
+        : "StoryVerse 暂时无法自动确认这篇故事是否适合公开，因此已进入人工确认队列。这不代表故事存在问题；故事已经安全保存，确认完成前仅自己可见。",
     });
   }
 }
@@ -130,29 +141,90 @@ async function recordModeration(
   });
 }
 
-async function failToHumanReview(admin: SupabaseClient, story: StoryRow, taskId: string, error: unknown) {
-  const reason = "机器暂时无法确定公开范围，已转交人工确认。";
+async function clearObsoleteReviewState(admin: SupabaseClient, storyId: string) {
+  await admin
+    .from("review_cases")
+    .update({
+      status: "cancelled",
+      decision_reason: "重新分析已经通过，无需继续人工复核。",
+      resolved_at: new Date().toISOString(),
+    })
+    .eq("story_id", storyId)
+    .eq("source", "machine")
+    .in("status", ["pending", "reviewing"]);
+  await admin
+    .from("notifications")
+    .update({
+      status: "resolved",
+      kind: "system",
+      reason: "故事重新分析已经完成。",
+      read: true,
+    })
+    .eq("story_id", storyId)
+    .eq("kind", "flagged");
+}
+
+async function savePassedAnalysis(
+  admin: SupabaseClient,
+  story: StoryRow,
+  taskId: string,
+  labels: StoryAnalysisFallback,
+  promptVersion: string,
+  taskError?: unknown,
+) {
+  const { error: storyError } = await admin
+    .from("stories")
+    .update({
+      status: "needs_confirmation",
+      moderation_decision: "pass",
+      moderation_categories: [],
+      ai_suggested_title: labels.suggestedTitle,
+      ai_type_id: labels.typeId,
+      ai_type_confidence: labels.typeConfidence,
+      ai_type_candidates: labels.typeCandidates,
+      final_type_id: labels.typeId,
+      ai_themes: labels.themes,
+      ai_model: arkModelInfo().text,
+      ai_prompt_version: promptVersion,
+      ai_analyzed_at: new Date().toISOString(),
+      final_themes: labels.themes,
+    })
+    .eq("id", story.id);
+  if (storyError) throw storyError;
+  await clearObsoleteReviewState(admin, story.id);
+  const { error: taskErrorResult } = await admin
+    .from("ai_tasks")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      last_error: taskError
+        ? `已降级放行：${taskError instanceof Error ? taskError.message : String(taskError)}`.slice(0, 1000)
+        : null,
+    })
+    .eq("id", taskId);
+  if (taskErrorResult) throw taskErrorResult;
+}
+
+async function failOpenStoryAnalysis(
+  admin: SupabaseClient,
+  story: StoryRow,
+  taskId: string,
+  error: unknown,
+  enabledTypeIds: StoryTypeId[],
+) {
+  const reason = "AI 分析暂时不可用，已按降级策略继续进入用户确认。";
+  const labels = createStoryAnalysisFallback({
+    ...story,
+    fallbackTypeId: enabledTypeIds.includes("other_or_unclassifiable") ? "other_or_unclassifiable" : enabledTypeIds[0],
+  });
   await recordModeration(admin, story, {
-    decision: "human_review",
+    decision: "pass",
     categories: [],
     evidence: [],
     reason,
-    promptVersion: "storyverse-moderation-labels-v2",
+    promptVersion: STORY_ANALYSIS_FAIL_OPEN_VERSION,
   });
-  await admin
-    .from("stories")
-    .update({ status: "pending_review", moderation_decision: "human_review", moderation_categories: [] })
-    .eq("id", story.id);
-  await admin.from("story_drafts").delete().eq("user_id", story.user_id);
-  await createReviewCase(admin, story, [], reason);
-  await admin
-    .from("ai_tasks")
-    .update({
-      status: "failed",
-      last_error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
-      next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString(),
-    })
-    .eq("id", taskId);
+  await savePassedAnalysis(admin, story, taskId, labels, STORY_ANALYSIS_FAIL_OPEN_VERSION, error);
 }
 
 export async function processStoryAnalysis(admin: SupabaseClient, storyId: string, taskId: string) {
@@ -164,9 +236,11 @@ export async function processStoryAnalysis(admin: SupabaseClient, storyId: strin
     .update({ status: "processing", attempts: Number(task?.attempts ?? 0) + 1, last_error: null })
     .eq("id", taskId);
 
+  const { data: enabledTypes } = await admin.from("story_types").select("id").eq("enabled", true).order("sort_order");
+  const enabledTypeIds = (enabledTypes ?? []).map((type) => type.id) as StoryTypeId[];
+  let result: StoryAiResult;
   try {
-    const { data: enabledTypes } = await admin.from("story_types").select("id").eq("enabled", true).order("sort_order");
-    const result = await analyzeStoryWithArk({
+    result = await analyzeStoryWithArk({
       title: story.title,
       body: story.body,
       city: story.city,
@@ -175,8 +249,14 @@ export async function processStoryAnalysis(admin: SupabaseClient, storyId: strin
       lifeStage: story.life_stage,
       mood: story.mood,
       people: story.people,
-      allowedTypeIds: (enabledTypes ?? []).map((type) => type.id) as StoryTypeId[],
+      allowedTypeIds: enabledTypeIds,
     });
+  } catch (error) {
+    await failOpenStoryAnalysis(admin, story, taskId, error, enabledTypeIds);
+    return getStory(admin, story.id);
+  }
+
+  try {
     const moderation = story.moderation_skipped
       ? {
           decision: "pass" as const,
@@ -214,68 +294,33 @@ export async function processStoryAnalysis(admin: SupabaseClient, storyId: strin
       return getStory(admin, story.id);
     }
 
-    const effectiveTitle = story.title || result.labels.suggestedTitle;
-    const embeddingContentHash = await storyContentHash(effectiveTitle, story.body);
-    const [storyEmbedding, themeEmbedding] = await Promise.all([
-      createEmbedding(`${effectiveTitle}\n${story.body}`),
-      createEmbedding(result.labels.themes.join(" / ")),
-    ]);
-    const model = arkModelInfo().embedding;
-    await admin.from("story_embeddings").upsert({
-      story_id: story.id,
-      story_embedding: storyEmbedding,
-      theme_embedding: themeEmbedding,
-      model,
-      model_version: model,
-      content_hash: embeddingContentHash,
-      theme_hash: await sha256(result.labels.themes.join("\u0000")),
-      generated_at: new Date().toISOString(),
-    });
-    await admin
-      .from("stories")
-      .update({
-        status: "needs_confirmation",
-        moderation_decision: "pass",
-        moderation_categories: [],
-        ai_suggested_title: result.labels.suggestedTitle,
-        ai_type_id: result.labels.typeId,
-        ai_type_confidence: result.labels.typeConfidence,
-        ai_type_candidates: result.labels.typeCandidates,
-        final_type_id: result.labels.typeId,
-        ai_themes: result.labels.themes,
-        ai_model: arkModelInfo().text,
-        ai_prompt_version: result.moderation.promptVersion,
-        ai_analyzed_at: new Date().toISOString(),
-        final_themes: result.labels.themes,
-      })
-      .eq("id", story.id);
-    await admin
-      .from("review_cases")
-      .update({
-        status: "cancelled",
-        decision_reason: "重新分析已经通过，无需继续人工复核。",
-        resolved_at: new Date().toISOString(),
-      })
-      .eq("story_id", story.id)
-      .eq("source", "machine")
-      .in("status", ["pending", "reviewing"]);
-    await admin
-      .from("notifications")
-      .update({
-        status: "resolved",
-        kind: "system",
-        reason: "故事重新分析已经完成。",
-        read: true,
-      })
-      .eq("story_id", story.id)
-      .eq("kind", "flagged");
-    await admin
-      .from("ai_tasks")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", taskId);
+    let embeddingError: unknown;
+    try {
+      const effectiveTitle = story.title || result.labels.suggestedTitle;
+      const embeddingContentHash = await storyContentHash(effectiveTitle, story.body);
+      const [storyEmbedding, themeEmbedding] = await Promise.all([
+        createEmbedding(`${effectiveTitle}\n${story.body}`),
+        createEmbedding(result.labels.themes.join(" / ")),
+      ]);
+      const model = arkModelInfo().embedding;
+      const { error } = await admin.from("story_embeddings").upsert({
+        story_id: story.id,
+        story_embedding: storyEmbedding,
+        theme_embedding: themeEmbedding,
+        model,
+        model_version: model,
+        content_hash: embeddingContentHash,
+        theme_hash: await sha256(result.labels.themes.join("\u0000")),
+        generated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    } catch (error) {
+      embeddingError = error;
+    }
+    await savePassedAnalysis(admin, story, taskId, result.labels, result.moderation.promptVersion, embeddingError);
     return getStory(admin, story.id);
   } catch (error) {
-    await failToHumanReview(admin, story, taskId, error);
+    await failOpenStoryAnalysis(admin, story, taskId, error, enabledTypeIds);
     return getStory(admin, story.id);
   }
 }

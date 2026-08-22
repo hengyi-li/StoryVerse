@@ -13,7 +13,7 @@ import {
   validateSecurityAnswer,
   validateSecurityQuestion,
 } from "../supabase/functions/_shared/validation.ts";
-import { normalizeDraftShape } from "../supabase/functions/_shared/story-data.ts";
+import { draftDatabaseFields, normalizeDraftShape } from "../supabase/functions/_shared/story-data.ts";
 
 const completeDraft = {
   guide: "agency",
@@ -105,6 +105,12 @@ describe("服务端故事校验", () => {
     expect(GENDERS).toEqual(["男", "女", "其他"]);
     for (const gender of GENDERS) expect(validateDraft({ ...completeDraft, gender }).gender).toBe(gender);
     expect(() => validateDraft({ ...completeDraft, gender: "伪造值" })).toThrow();
+  });
+
+  it("宠物/动物选项能通过服务端校验并原样写入数据库字段", () => {
+    const validated = validateDraft({ ...completeDraft, people: ["自己", "宠物/动物"] });
+    expect(validated.people).toEqual(["自己", "宠物/动物"]);
+    expect(draftDatabaseFields(normalizeDraftShape(validated)).people).toEqual(["自己", "宠物/动物"]);
   });
 
   it("经纬度接受边界值并拒绝越界或非数字", () => {

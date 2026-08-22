@@ -9,25 +9,30 @@ export class ApiError extends Error {
   }
 }
 
-const defaultOrigins = ["http://127.0.0.1:4173", "http://localhost:4173", "https://chelsealeezc.github.io"];
+const localOrigins = ["http://127.0.0.1:4173", "http://localhost:4173"];
 
-function allowedOrigins() {
+export function allowedOrigins() {
   const configured = (Deno.env.get("FRONTEND_ORIGINS") ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  return new Set([...defaultOrigins, ...configured]);
+  return new Set([...localOrigins, ...configured]);
+}
+
+export function isAllowedOrigin(origin: string | null) {
+  return Boolean(origin && allowedOrigins().has(origin));
 }
 
 export function corsHeaders(request: Request) {
   const origin = request.headers.get("origin");
-  const allowed = allowedOrigins();
-  return {
-    "Access-Control-Allow-Origin": origin && allowed.has(origin) ? origin : defaultOrigins[0],
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-storyverse-worker-token",
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers":
+      "authorization, apikey, content-type, x-client-info, x-storyverse-monitor-token, x-storyverse-worker-token",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin",
   };
+  if (isAllowedOrigin(origin)) headers["Access-Control-Allow-Origin"] = origin!;
+  return headers;
 }
 
 export function json(request: Request, body: unknown, status = 200) {

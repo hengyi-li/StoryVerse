@@ -86,22 +86,99 @@ describe("StarLobby 故事合并", () => {
   it("英文呈现使用翻译内容，但不修改原始故事对象", () => {
     const source = story("translated", "published");
     source.cityNameEn = "Shanghai";
-    const translated = applyStoryTranslation(source, {
-      title: "A new beginning",
-      excerpt: "A short translated excerpt.",
-      body: "This is the complete translated story body.",
-      themes: ["Growth", "Choice"],
-      emotion: "At peace",
-      stage: "Early adulthood",
-      people: ["Myself"],
-      city: "Shanghai",
-      translatedAt: "2026-08-17T00:00:00Z",
-    });
+    const translated = applyStoryTranslation(
+      source,
+      {
+        title: "A new beginning",
+        excerpt: "A short translated excerpt.",
+        body: "This is the complete translated story body.",
+        themes: ["Growth", "Choice"],
+        emotion: "At peace",
+        stage: "Early adulthood",
+        people: ["Myself"],
+        city: "Shanghai",
+        translatedAt: "2026-08-17T00:00:00Z",
+      },
+      "en",
+    );
 
     expect(translated.title).toBe("A new beginning");
     expect(translated.city).toBe("Shanghai");
     expect(translated.theme).toBe("Growth");
     expect(source.title).toBe("translated");
     expect(source.body).toContain("这是一个用于测试的故事正文");
+  });
+
+  it("英文界面优先使用英文城市名，避免旧翻译缓存显示中文城市", () => {
+    const source = story("translated-city", "published");
+    source.city = "上海";
+    source.cityNameEn = "Shanghai";
+
+    const translated = applyStoryTranslation(
+      source,
+      {
+        title: "A story in Shanghai",
+        excerpt: "A translated excerpt.",
+        body: "This is the complete translated story body.",
+        themes: ["Growth", "Family"],
+        emotion: "Warm",
+        stage: "Middle adulthood",
+        people: ["Family"],
+        city: "上海",
+        translatedAt: "2026-08-22T00:00:00Z",
+      },
+      "en",
+    );
+
+    expect(translated.city).toBe("Shanghai");
+
+    source.cityNameEn = "";
+    expect(
+      applyStoryTranslation(
+        source,
+        {
+          title: "A story in Shanghai",
+          excerpt: "A translated excerpt.",
+          body: "This is the complete translated story body.",
+          themes: ["Growth", "Family"],
+          emotion: "Warm",
+          stage: "Middle adulthood",
+          people: ["Family"],
+          city: "上海",
+          translatedAt: "2026-08-22T00:00:00Z",
+        },
+        "en",
+      ).city,
+    ).toBe("Shanghai");
+  });
+
+  it("英文原文在中文界面使用中文缓存，但不修改英文原文对象", () => {
+    const source = {
+      ...story("english-source", "published"),
+      title: "A new beginning",
+      body: "This is the original English story body.",
+      city: "London",
+      themes: ["Growth", "Choice"],
+    };
+    const translated = applyStoryTranslation(
+      source,
+      {
+        title: "新的开始",
+        excerpt: "一段中文摘要。",
+        body: "这是完整的中文故事译文。",
+        themes: ["个人成长", "人生选择"],
+        emotion: "平和",
+        stage: "成年早期",
+        people: ["自己"],
+        city: "伦敦",
+        translatedAt: "2026-08-22T00:00:00Z",
+      },
+      "zh",
+    );
+
+    expect(translated.title).toBe("新的开始");
+    expect(translated.city).toBe("伦敦");
+    expect(translated.perspective).toBe("人生经验");
+    expect(source.body).toBe("This is the original English story body.");
   });
 });

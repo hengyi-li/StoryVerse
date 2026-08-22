@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 
 const useLocalSupabase = process.argv.includes("--local");
-const allowedOrigin = useLocalSupabase ? "http://127.0.0.1:4173" : "https://chelsealeezc.github.io";
+const allowedOrigin = useLocalSupabase ? "http://127.0.0.1:4173" : requiredFrontendOrigin();
 const eventIds = [];
 const userIds = [];
 const checks = [];

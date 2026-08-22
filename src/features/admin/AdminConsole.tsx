@@ -33,6 +33,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { dataService, type AdminDashboard } from "../../services/data-service";
+import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { localizedError } from "../../lib/localized-error";
 import type { Language, ModerationFlag, ReviewBucket, ReviewItem } from "../../types/domain";
 import type { ThemeMode } from "../../types/ui";
@@ -211,8 +212,8 @@ const seedFields: Array<{
     name: "people",
     required: "yes",
     description: [
-      "故事人物；多项用 | 分隔，可用：自己、家人、恋人、朋友、陌生人、老师、同事、其他",
-      "Separate multiple values with |; use 自己, 家人, 恋人, 朋友, 陌生人, 老师, 同事, or 其他",
+      "故事人物；多项用 | 分隔，可用：自己、家人、恋人、朋友、陌生人、老师、同事、宠物/动物、其他",
+      "Separate multiple values with |; use 自己, 家人, 恋人, 朋友, 陌生人, 老师, 同事, 宠物/动物, or 其他",
     ],
     example: "自己|家人",
   },
@@ -342,12 +343,14 @@ function StatusPill({ value, zh }: { value: unknown; zh: boolean }) {
 export function AdminConsole({
   language,
   themeMode,
+  displayName,
   onLogout,
   onLanguageChange,
   onThemeModeChange,
 }: {
   language: Language;
   themeMode: ThemeMode;
+  displayName: string;
   onLogout: () => void;
   onLanguageChange: (language: Language) => void;
   onThemeModeChange: (theme: ThemeMode) => void;
@@ -583,6 +586,7 @@ export function AdminConsole({
               >
                 <Languages size={18} />
               </button>
+              <AuthenticatedGreeting displayName={displayName} language={language} />
               <button type="button" className="admin-icon-button is-danger" onClick={onLogout}>
                 <LogOut size={17} />
                 <span>{zh ? "退出" : "Log out"}</span>

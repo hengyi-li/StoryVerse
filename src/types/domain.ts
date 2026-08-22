@@ -75,8 +75,8 @@ export interface Story {
   recommendationScores?: Record<string, number>;
   recommendationReason?: string;
   visualStatus: "none" | "ready" | "generating" | "failed" | "blocked";
-  /** 已缓存的英文版本；StarLobby 首次加载时一起读取，切换语言无需等待 AI。 */
-  translationEn?: StoryTranslation;
+  /** 已缓存的目标语言版本；原文始终保留在 Story 自身字段中。 */
+  translations?: Partial<Record<Language, StoryTranslation>>;
   x: number;
   y: number;
 }

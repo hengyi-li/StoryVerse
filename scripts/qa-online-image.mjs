@@ -3,9 +3,11 @@ import { readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
 import { imageDimensions } from "./lib/image-dimensions.mjs";
+import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const projectUrl = `https://${PROJECT_REF}.supabase.co`;
+const allowedOrigin = requiredFrontendOrigin();
 
 function parseJsonOutput(output, commandName) {
   const objectStart = output.indexOf("{");
@@ -40,7 +42,7 @@ async function invoke(name, body, accessToken, publishableKey) {
       apikey: publishableKey,
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      Origin: "https://chelsealeezc.github.io",
+      Origin: allowedOrigin,
     },
     body: JSON.stringify(body ?? {}),
   });

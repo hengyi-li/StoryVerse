@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Flag, Heart, RefreshCw, Sparkles, ThumbsDown, X } from "lucide-react";
 import { LanguageSelect, AppLogo, Pill, PrimaryButton, ThemeToggle } from "../../components/AppControls";
+import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { uiCopy as copy } from "../../data/interface-content";
 import { applyStoryTranslation, dataService } from "../../services/data-service";
 import type { StoryRecommendation } from "../../services/data-service";
@@ -8,6 +9,7 @@ import type { AppState, Language, StoryReaction, Story } from "../../types/domai
 import type { AppUpdate, ThemeMode } from "../../types/ui";
 import { track } from "../../lib/analytics";
 import { reactionFeedbackCopy } from "../../lib/reaction-feedback";
+import { storyNeedsTranslation } from "../../lib/story-language";
 
 type RecommendedStory = Story & { recommendationReason: string };
 
@@ -262,6 +264,7 @@ function ReportDialog({
 
 export function RecommendationsPage({
   state,
+  displayName,
   update,
   onEnterStarLobby,
   onHome,
@@ -269,6 +272,7 @@ export function RecommendationsPage({
   onThemeModeChange,
 }: {
   state: AppState;
+  displayName: string;
   update: AppUpdate;
   onEnterStarLobby: () => void;
   onHome: () => void;
@@ -286,16 +290,25 @@ export function RecommendationsPage({
     setTranslationNotice("");
     try {
       let items = await (refresh ? dataService.refreshRecommendations() : dataService.listRecommendations());
-      if (state.language === "en" && items.length) {
+      const translatedStoryIds = items
+        .filter((item) => storyNeedsTranslation(item.story, state.language))
+        .map((item) => item.story.id);
+      if (translatedStoryIds.length) {
         try {
-          const translations = await dataService.translateStories(items.map((item) => item.story.id));
+          const translations = await dataService.translateStories(translatedStoryIds, state.language);
           items = items.map((item) => ({
             ...item,
-            story: applyStoryTranslation(item.story, translations[item.story.id]),
+            story: storyNeedsTranslation(item.story, state.language)
+              ? applyStoryTranslation(item.story, translations[item.story.id], state.language)
+              : item.story,
           }));
         } catch (error) {
           console.info("[StoryVerse] Story translation is temporarily unavailable.", error);
-          setTranslationNotice("English translation is temporarily unavailable. Showing the author's original text.");
+          setTranslationNotice(
+            state.language === "zh"
+              ? "中文翻译暂时不可用，正在显示作者原文。"
+              : "English translation is temporarily unavailable. Showing the author's original text.",
+          );
         }
       }
       setRecommendations(items);
@@ -385,6 +398,7 @@ export function RecommendationsPage({
               update({ language });
             }}
           />
+          <AuthenticatedGreeting displayName={displayName} language={state.language} />
         </div>
       </header>
       <section className="recommendations-heading">

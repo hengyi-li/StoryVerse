@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const CONFIRMATION = `prepare-seed-media-${PROJECT_REF}`;
@@ -10,6 +11,7 @@ const OPERATOR_USERNAME = "seed_import_operator";
 const OPERATOR_EMAIL = "seed-import-operator@system.storyverse.invalid";
 const IMAGE_STYLES = ["clay-3d", "indie-zine", "retro-collage"];
 const TRANSLATION_PROMPT_VERSION = "storyverse-story-translation-v1";
+const frontendOrigin = requiredFrontendOrigin();
 
 function parseEnvFile(value) {
   return Object.fromEntries(
@@ -337,7 +339,7 @@ async function callFunction(name, accessToken, body) {
       apikey: publishableKey,
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      Origin: "https://chelsealeezc.github.io",
+      Origin: frontendOrigin,
     },
     body: JSON.stringify(body),
   });

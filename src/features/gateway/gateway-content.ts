@@ -1,29 +1,23 @@
 export const WORLD_BG =
   "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_231253_53c0854c-d13c-42c1-9fc0-17e87cd34091.png&w=1280&q=85";
 
-/*
- * 首屏轮播与开场文案。原本是纯中文硬编码 —— 英文用户第一眼就会看到中文，
- * 所以改成按语言取。英文不是逐字翻译：中文这几句偏抒情、句式短，
- * 直译会变得生硬，这里按同样的语气重写。
- */
+/* 首页故事预览轮播；中英文数组中的同一索引对应同一个故事。 */
 export const quotes = {
   zh: [
-    "你可能会看到和你天差地别的故事",
-    "也会发现那个远隔重洋的陌生朋友",
-    "和你当时的心境如此相似",
-    "和千万种声音共鸣",
-    "也看到不同的人生",
-    "每一个故事，都可能是一扇新的窗",
-    "欢迎来到这里",
+    "从外省的大学提前回到家乡，我久违地坐上公交车，从东到西看完长安街。\n\n那时，成年不久的我将以志愿者的身份，成为和家乡一同忙碌着的那群人中的一员。我顺利通过了选拔，成为北京冬奥会的一名礼仪人员，其中主要的任务是在开幕式时举着雪花引导牌走过鸟巢，为奥地利代表团引路。",
+    "大约 30 年前我刚参加工作时，曾与她相识。我们相处得不错。但问题在于，她当时已有男友，因此我们之间显然并未发生任何事……随后发生了一件颇为出人意料的事情。在我们初次相识大约 30 年后，我们在一家购物中心偶遇。那是一次非常偶然的相遇。我们交谈、回顾各自的生活近况，并发现我们都处于单身状态。她告诉我，这些年来她曾遇到过几位男士，但不知为何最终都没有成事。",
+    "本科最后一年的寒假，我靠着自己的奖学金和实习、家教收入，带着父母开启了一场河南自驾旅行。全程的行程规划、酒店预订、各项开销都由我全权负责，褪去了往日被父母照顾的模样，终于轮到我好好陪伴、回馈他们。",
+    "大一的初冬，我参与了全国游泳锦标赛的反兴奋剂志愿者工作。一次比赛之后，一个女孩比赛下场后就大哭起来。后来志愿者同事告诉我，她在12岁就已经成名，但是后来却因为伤病而止步不前。",
+    "我想讲的是在2005年，我的小孩在九个月大的时候被查出来脑瘫，当时对我们来说是一个晴天霹雳的消息，而且是一种不能相信的消息。我就和我的妈妈，也就是孩子的姥姥，我们两个带孩子到贵阳去确定到底是不是这样。贵阳的医生不敢确定，因为看不出来明显的症状。我们还是不相信，就到重庆的大学。那边的医生说如果不治疗就会得脑瘫，然后就喊我们先拿10万，先慢慢治。",
+    "长大后我仍然不习惯和猫待在一起，总是和它们保持距离。而且，在我小时候，社会对在家养猫狗并不接受，人们对宠物也没什么兴趣。但两年前，因为女儿上大学，我们搬到了北京。新家是一楼，带一个小院子。院子里有一只黄猫，很快就俘获了我的心。每当我逗它说“猫猫，过来！”时，它都会立刻跑过来，卖萌耍宝。虽然我已经很喜欢它了，但我还是忍住了，不让它进屋。然后，去年，2025年8月18日，发生了一件事，彻底改变了一切。",
   ],
   en: [
-    "You'll find lives nothing like your own",
-    "And a stranger an ocean away",
-    "who once felt exactly as you did",
-    "Find echoes in a thousand voices",
-    "and glimpse lives unlike your own",
-    "Every story can open a window",
-    "Welcome to StoryVerse",
+    "I returned early from my university in another province and, for the first time in a long while, took a bus across Chang'an Avenue from east to west.\n\nAs a young adult, I was about to join the people working alongside my hometown as a volunteer. I passed the selection process and became a protocol volunteer for the Beijing Winter Olympics. My main task was to carry a snowflake-shaped guide sign through the Bird's Nest during the opening ceremony and lead the Austrian delegation.",
+    "About 30 years ago, when I had just started working, I met her. We got along well. The problem was that she already had a boyfriend, so of course nothing ever happened between us… Then something quite unexpected happened. Around 30 years after we first met, we ran into each other at a shopping mall. It was a completely chance encounter. We talked, caught up on each other's lives, and discovered that we were both single. She told me that she had met several men over the years, but for one reason or another, none of those relationships had worked out.",
+    "During the winter break of my final undergraduate year, I used my scholarship and the money I had earned from internships and tutoring to take my parents on a road trip through Henan. I planned the entire itinerary, booked the hotels, and covered every expense. I was no longer the child being looked after by my parents; at last, it was my turn to spend time with them and give something back.",
+    "In the early winter of my freshman year, I volunteered in anti-doping work at the National Swimming Championships. After one race, a girl burst into tears as soon as she left the pool. Another volunteer later told me that she had already become famous at the age of twelve, but injuries had since brought her progress to a halt.",
+    "The story I want to tell happened in 2005, when my child was diagnosed with cerebral palsy at nine months old. The news struck us like a bolt from the blue, and we simply could not believe it. My mother—the child's grandmother—and I took the baby to Guiyang to find out whether it was really true. The doctors there could not be certain because there were no obvious symptoms. We still could not accept it, so we went to a university hospital in Chongqing. The doctors there said that without treatment the child would develop cerebral palsy, and told us to prepare 100,000 yuan so treatment could begin gradually.",
+    "Even as an adult, I was never comfortable around cats and always kept my distance from them. When I was young, keeping cats or dogs at home was not socially accepted, and people had little interest in pets. But two years ago, we moved to Beijing because my daughter was starting university. Our new home was on the ground floor and had a small courtyard. A yellow cat lived there, and it quickly won my heart. Whenever I teased it by calling, “Kitty, come here!” it would run straight over and act adorably. Although I had grown very fond of it, I still held back and would not let it inside. Then, last year, on August 18, 2025, something happened that changed everything.",
   ],
 };
 
@@ -51,7 +45,7 @@ export const gatewayCopy = {
     heroBrand: "StoryVerse",
     heroBody: "各种意义上的异乡者，终会在这里相逢。",
     partner: "和千万种声音共鸣，也看到不同的人生。",
-    previewTitle: ["真实故事。", "真实声音。"],
+    previewTitle: ["构成我们的不是原子，而是故事。", "——米里尔・鲁凯泽"],
     previewSubtitle: "在 StoryVerse，看见和你天差地别的故事，也看见和你如此相似的人。",
     previousStory: "上一张故事卡片",
     nextStory: "下一张故事卡片",
@@ -78,6 +72,10 @@ export const gatewayCopy = {
     nicknamePlaceholder: "这个昵称会公开显示，登录账号不会展示给其他用户",
     accountIdentifier: "账号",
     accountIdentifierPlaceholder: "4–20 位字母、数字或下划线",
+    accountRequired: "请输入账号",
+    accountTooShort: "账号至少需要 4 位",
+    accountTooLong: "账号不能超过 20 位",
+    accountInvalidCharacters: "账号只能使用字母、数字或下划线",
     password: "密码",
     signupPasswordPlaceholder: "设置 10–72 位密码",
     loginPasswordPlaceholder: "输入你的密码",
@@ -112,7 +110,7 @@ export const gatewayCopy = {
     heroBrand: "StoryVerse",
     heroBody: "Even lives far apart can meet here.",
     partner: "Find echoes in countless voices — and glimpse lives unlike your own.",
-    previewTitle: ["Real stories.", "Real voices."],
+    previewTitle: ["We are made of stories,", "not atoms. — Muriel Rukeyser"],
     previewSubtitle: "In StoryVerse, meet stories far from yours and people unexpectedly close to you.",
     previousStory: "Previous story card",
     nextStory: "Next story card",
@@ -139,6 +137,10 @@ export const gatewayCopy = {
     nicknamePlaceholder: "This nickname will be public; your login username will not be shown.",
     accountIdentifier: "Username",
     accountIdentifierPlaceholder: "4–20 letters, numbers or underscores",
+    accountRequired: "Enter your username",
+    accountTooShort: "Username must contain at least 4 characters",
+    accountTooLong: "Username cannot exceed 20 characters",
+    accountInvalidCharacters: "Use letters, numbers, or underscores only",
     password: "Password",
     signupPasswordPlaceholder: "Create a 10–72 character password",
     loginPasswordPlaceholder: "Enter your password",

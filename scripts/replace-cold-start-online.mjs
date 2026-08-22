@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const CONFIRMATION = `replace-seed-${PROJECT_REF}`;
@@ -10,6 +11,7 @@ const NEW_CSV = new URL("../docs/cold-start/storyverse-seed-stories.csv", import
 const ONLINE_URL = `https://${PROJECT_REF}.supabase.co`;
 const OPERATOR_USERNAME = "seed_import_operator";
 const OPERATOR_EMAIL = "seed-import-operator@system.storyverse.invalid";
+const frontendOrigin = requiredFrontendOrigin();
 
 function parseJsonOutput(output, commandName) {
   const starts = [output.indexOf("{"), output.indexOf("[")].filter((index) => index >= 0);
@@ -183,7 +185,7 @@ async function callAdmin(accessToken, body) {
       apikey: publishableKey,
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      Origin: "https://chelsealeezc.github.io",
+      Origin: frontendOrigin,
     },
     body: JSON.stringify(body),
   });

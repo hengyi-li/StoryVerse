@@ -84,7 +84,10 @@ const messageByCode: Record<string, LocalizedMessage> = {
   SELF_REPORT_NOT_ALLOWED: { zh: "不能举报自己的故事。", en: "You cannot report your own story." },
   INVALID_FEEDBACK: { zh: "反馈内容需要在 1–2000 字之间。", en: "Feedback must be 1–2,000 characters." },
   INVALID_STORY_IDS: { zh: "每次需要选择 1–5 篇故事。", en: "Select 1–5 stories at a time." },
-  INVALID_TARGET_LANGUAGE: { zh: "目前只支持翻译为英文。", en: "English is currently the only translation target." },
+  INVALID_TARGET_LANGUAGE: {
+    zh: "请选择中文或英文作为翻译语言。",
+    en: "Choose Chinese or English as the translation language.",
+  },
 
   CONFIG_DRAFT_NOT_FOUND: { zh: "请先保存一个推荐配置草稿。", en: "Save a recommendation draft first." },
   INVALID_IMPORT: { zh: "每次请选择包含 1–500 条故事的 CSV。", en: "Choose a CSV containing 1–500 stories." },

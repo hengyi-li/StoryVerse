@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { LanguageSelect, AppLogo, PrimaryButton, ThemeToggle } from "../../components/AppControls";
+import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { uiCopy as copy } from "../../data/interface-content";
 import type { AppState, ResonanceMode } from "../../types/domain";
 import type { AppUpdate, ThemeMode } from "../../types/ui";
@@ -9,6 +10,7 @@ import { track } from "../../lib/analytics";
 
 export function ResonancePage({
   state,
+  displayName,
   update,
   onBack,
   onContinue,
@@ -20,6 +22,7 @@ export function ResonancePage({
   onTourSkip,
 }: {
   state: AppState;
+  displayName: string;
   update: AppUpdate;
   onBack: () => void;
   onContinue: () => void;
@@ -82,6 +85,7 @@ export function ResonancePage({
               update({ language });
             }}
           />
+          <AuthenticatedGreeting displayName={displayName} language={state.language} />
         </div>
       </header>
       <section className="resonance-hero">

@@ -6,6 +6,7 @@ import gsap from "gsap";
 import * as THREE from "three";
 import { Tour } from "../tour/Tour";
 import { BrandLogo } from "../../components/BrandLogo";
+import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { localizedError } from "../../lib/localized-error";
 import { applyStoryTranslation, dataService } from "../../services/data-service";
 import { storyPosition } from "./star-position";
@@ -24,8 +25,17 @@ import {
 } from "../../lib/analytics";
 import { createActiveTimer, pageCanAccumulateTime } from "../../lib/analytics-timing";
 import { reactionFeedbackCopy } from "../../lib/reaction-feedback";
+import { detectStoryLanguage, storyTranslationTarget } from "../../lib/story-language";
 import { preloadStoryImage, storyImageThumbnailUrl } from "../../services/story-image";
-import type { InboxMessage, Language, ResonancePreferences, StoryReaction, Story } from "../../types/domain";
+import { storyPanelIdentity, storyPanelTags } from "./story-panel-content";
+import type {
+  InboxMessage,
+  Language,
+  ResonancePreferences,
+  StoryReaction,
+  Story,
+  StoryTranslation,
+} from "../../types/domain";
 import type { ThemeMode } from "../../types/ui";
 import "./star-lobby.css";
 
@@ -55,12 +65,14 @@ type StoryNodeData = {
   categoryLabelEn?: string;
   cityScore: number;
   isCenterStory: boolean;
+  sourceLanguage: Language;
   label: string;
   desc: string;
-  labelEn?: string;
-  descEn?: string;
   tags?: string[];
-  tagsEn?: string[];
+  gender?: string;
+  age?: number;
+  city: string;
+  cityNameEn?: string;
   ownedByCurrentUser: boolean;
   liked: boolean;
   angle: number;
@@ -94,7 +106,9 @@ const starLobbyCopy = {
     imageLoading: "正在加载故事图片",
     imageFailed: "图片暂时未能显示",
     imageMissing: "未生成图片",
-    escape: "[ESC]",
+    translating: "正在翻译这篇故事…",
+    translationPending: "正在准备忠实的中文译文，作者原文不会被修改。",
+    translationFailed: "中文翻译暂时不可用，正在显示作者原文。",
     stats: (words: number, cityScore: number) => `文本长度 ${words} / 城市接近度 ${Math.round(cityScore * 100)}%`,
     legend:
       "每个星点是一段故事：大小来自文本长度，颜色来自类型，距离只表示故事发生城市与你最近一篇公开故事的地理远近。",
@@ -154,7 +168,9 @@ const starLobbyCopy = {
     imageLoading: "Loading story image",
     imageFailed: "Image temporarily unavailable",
     imageMissing: "No image generated",
-    escape: "[ESC]",
+    translating: "Translating this story…",
+    translationPending: "Preparing a faithful English version while keeping the author's original text unchanged.",
+    translationFailed: "English translation is temporarily unavailable. The author's original text is shown.",
     stats: (words: number, cityScore: number) => `${words} words / ${Math.round(cityScore * 100)}% city proximity`,
     legend:
       "Each star is a story: size comes from length, color from type, and distance only shows geography relative to your latest published story.",
@@ -204,6 +220,17 @@ const starLobbyCopy = {
     rearrangeFailed: "Stories could not be rearranged. Try again shortly.",
   },
 } as const;
+
+type StoryTranslationCache = Record<Language, Record<string, StoryTranslation>>;
+
+function cachedTranslationsFromStories(stories: Story[]): StoryTranslationCache {
+  const cached: StoryTranslationCache = { zh: {}, en: {} };
+  for (const story of stories) {
+    if (story.translations?.zh) cached.zh[story.id] = story.translations.zh;
+    if (story.translations?.en) cached.en[story.id] = story.translations.en;
+  }
+  return cached;
+}
 
 const resonanceKeys = ["city", "stage", "theme"] as const;
 const defaultResonance: ResonancePreferences = { city: "similar", stage: "different", theme: "similar" };
@@ -872,18 +899,12 @@ function StoryPanel({
           </span>
         </div>
         <div className="story-panel-meta">
-          <span>
+          <span className="story-panel-category">
             {(language === "en" ? node.categoryLabelEn : node.categoryLabelZh) ?? node.category.replaceAll("_", " ")}
           </span>
-          <span>{text.escape}</span>
+          <span className="story-panel-identity">{storyPanelIdentity(node, language)}</span>
         </div>
-        <h2>
-          {translationPending
-            ? "Translating this story…"
-            : language === "en" && node.labelEn
-              ? node.labelEn
-              : node.label}
-        </h2>
+        <h2>{translationPending ? text.translating : node.label}</h2>
         {node.ownedByCurrentUser && (
           <p className={`story-panel-own-status is-${node.status}`}>
             <b>{text.ownStory}</b>
@@ -899,19 +920,17 @@ function StoryPanel({
           {text.stats(node.words, node.cityScore)}
         </p>
         {translationPending ? (
-          <p role="status">Preparing a faithful English version while keeping the author's original text unchanged.</p>
+          <p role="status">{text.translationPending}</p>
         ) : (
           <>
-            {translationFailed && (
-              <p role="status">English translation is temporarily unavailable. The author's original text is shown.</p>
-            )}
-            <p>{language === "en" && node.descEn ? node.descEn : node.desc}</p>
+            {translationFailed && <p role="status">{text.translationFailed}</p>}
+            <p className="story-panel-body">{node.desc}</p>
           </>
         )}
         <div className="story-panel-divider" />
         {!translationPending && (
           <div className="story-panel-tags">
-            {((language === "en" ? node.tagsEn : node.tags) ?? []).map((tag) => (
+            {(node.tags ?? []).map((tag) => (
               <span key={tag}>{tag}</span>
             ))}
           </div>
@@ -1105,6 +1124,9 @@ function ResonanceBar({
 function localizedNotificationReason(reason: string, language: Language) {
   if (language === "zh") return reason;
   const systemReasons: Record<string, string> = {
+    "StoryVerse 暂时无法自动确认这篇故事是否适合公开，因此已进入人工确认队列。这不代表故事存在问题；故事已经安全保存，确认完成前仅自己可见。":
+      "StoryVerse could not automatically confirm whether this story is suitable for public sharing, so it has entered the human review queue. This does not mean there is a problem with your story; it is safely saved and visible only to you until review is complete.",
+    "故事已保存，确认前仅自己可见。": "Your story is saved and visible only to you until review is complete.",
     "故事已经保存，并交给人工温和确认；确认前不会公开。":
       "Your story is saved and awaiting content review. It will stay private until review is complete.",
     "故事已经保存，正在等待内容确认；确认完成前不会公开。":
@@ -1118,16 +1140,25 @@ function localizedNotificationReason(reason: string, language: Language) {
   return systemReasons[reason] ?? reason;
 }
 
+const genericPendingReviewReasons = new Set([
+  "StoryVerse 暂时无法自动确认这篇故事是否适合公开，因此已进入人工确认队列。这不代表故事存在问题；故事已经安全保存，确认完成前仅自己可见。",
+  "故事已保存，确认前仅自己可见。",
+  "故事已经保存，并交给人工温和确认；确认前不会公开。",
+  "故事已经保存，正在等待内容确认；确认完成前不会公开。",
+]);
+
 function AccountDock({
   language,
   onLogout,
   inbox,
   onMarkInboxRead,
+  onDisplayNameChange,
 }: {
   language: Language;
   onLogout: () => void;
   inbox: InboxMessage[];
   onMarkInboxRead: () => void;
+  onDisplayNameChange?: (displayName: string) => void;
 }) {
   const text = starLobbyCopy[language];
   const [accountOpen, setAccountOpen] = useState(false);
@@ -1171,7 +1202,13 @@ function AccountDock({
           <Icon name="logout" size={18} />
         </button>
       </div>
-      {accountOpen && <AccountDialog language={language} onClose={() => setAccountOpen(false)} />}
+      {accountOpen && (
+        <AccountDialog
+          language={language}
+          onClose={() => setAccountOpen(false)}
+          onDisplayNameChange={onDisplayNameChange}
+        />
+      )}
       {inboxOpen && (
         <div
           className="star-lobby-modal-backdrop"
@@ -1209,35 +1246,38 @@ function AccountDock({
                         ? "已有结果"
                         : "Reviewed";
                 const headline =
-                  message.status !== "resolved"
-                    ? zh
-                      ? "故事正在等待内容确认"
-                      : "Story awaiting content review"
-                    : message.kind === "system"
-                      ? zh
-                        ? "故事状态已更新"
-                        : "Story status updated"
-                      : message.kind === "needs_edit"
-                        ? zh
-                          ? "故事需要修改"
-                          : "Story needs changes"
-                        : message.kind === "removed"
-                          ? zh
-                            ? "故事已下架"
-                            : "Story removed"
-                          : zh
-                            ? "故事已保留"
-                            : "Story kept";
-                const hint =
                   message.status === "pending"
                     ? zh
-                      ? "确认完成后，结果会出现在这里。"
-                      : "The outcome will appear here when review is complete."
+                      ? "故事正在等待人工确认"
+                      : "Story awaiting human review"
                     : message.status === "reviewing"
                       ? zh
-                        ? "内容确认正在进行中。"
-                        : "Content review is in progress."
-                      : "";
+                        ? "故事正在人工确认中"
+                        : "Your story is being reviewed"
+                      : message.kind === "system"
+                        ? zh
+                          ? "故事状态已更新"
+                          : "Story status updated"
+                        : message.kind === "needs_edit"
+                          ? zh
+                            ? "故事需要修改"
+                            : "Story needs changes"
+                          : message.kind === "removed"
+                            ? zh
+                              ? "故事已下架"
+                              : "Story removed"
+                            : zh
+                              ? "故事已保留"
+                              : "Story kept";
+                const hint =
+                  message.status === "pending" || message.status === "reviewing"
+                    ? zh
+                      ? "StoryVerse 暂时无法自动确认这篇故事是否适合公开，因此已进入人工确认队列。这不代表故事存在问题；故事已经安全保存，确认完成前仅自己可见。"
+                      : "StoryVerse could not automatically confirm whether this story is suitable for public sharing, so it has entered the human review queue. This does not mean there is a problem with your story; it is safely saved and visible only to you until review is complete."
+                    : "";
+                const showReason =
+                  Boolean(message.reason) &&
+                  (message.status === "resolved" || !genericPendingReviewReasons.has(message.reason));
                 return (
                   <div
                     className={`inbox-item ${message.status === "resolved" ? message.kind : message.status}`}
@@ -1247,9 +1287,9 @@ function AccountDock({
                     <b>{headline}</b>
                     <span>{message.storyTitle}</span>
                     {hint && <p>{hint}</p>}
-                    {message.reason && (
+                    {showReason && (
                       <p>
-                        {zh ? "原因：" : "Reason: "}
+                        {zh ? "说明：" : "Note: "}
                         {localizedNotificationReason(message.reason, language)}
                       </p>
                     )}
@@ -1265,7 +1305,15 @@ function AccountDock({
   );
 }
 
-function AccountDialog({ language, onClose }: { language: Language; onClose: () => void }) {
+function AccountDialog({
+  language,
+  onClose,
+  onDisplayNameChange,
+}: {
+  language: Language;
+  onClose: () => void;
+  onDisplayNameChange?: (displayName: string) => void;
+}) {
   const text = starLobbyCopy[language];
   const [saved, setSaved] = useState(false);
   const [nickname, setNickname] = useState("");
@@ -1312,6 +1360,7 @@ function AccountDialog({ language, onClose }: { language: Language; onClose: () 
         feedback,
       })
       .then(() => {
+        onDisplayNameChange?.(normalizedNickname);
         setSaved(true);
         setPassword("");
         setPasswordConfirmation("");
@@ -1502,6 +1551,7 @@ function StoryReportDialog({
 
 export function StarLobby({
   language,
+  displayName,
   themeMode,
   onLanguageChange,
   onThemeModeChange,
@@ -1520,8 +1570,10 @@ export function StarLobby({
   removedStoryIds = [],
   inbox = [],
   onMarkInboxRead,
+  onDisplayNameChange,
 }: {
   language: Language;
+  displayName: string;
   themeMode: ThemeMode;
   onLanguageChange: (language: Language) => void;
   onThemeModeChange: (themeMode: ThemeMode) => void;
@@ -1543,6 +1595,7 @@ export function StarLobby({
   removedStoryIds?: string[];
   inbox?: InboxMessage[];
   onMarkInboxRead?: () => void;
+  onDisplayNameChange?: (displayName: string) => void;
 }) {
   const [activeView, setActiveView] = useState<ViewMode>("explore");
   const [selected, setSelected] = useState<StoryNodeData | null>(null);
@@ -1552,9 +1605,7 @@ export function StarLobby({
   const [draftResonance, setDraftResonance] = useState<ResonancePreferences>(resonance);
   const [resonancePending, setResonancePending] = useState(false);
   const [resonanceError, setResonanceError] = useState("");
-  const [translations, setTranslations] = useState<Awaited<ReturnType<typeof dataService.translateStories>>>(() =>
-    Object.fromEntries(stories.filter((story) => story.translationEn).map((story) => [story.id, story.translationEn!])),
-  );
+  const [translations, setTranslations] = useState<StoryTranslationCache>(() => cachedTranslationsFromStories(stories));
   const translationInFlight = useRef(new Set<string>());
   const previousLanguage = useRef(language);
   const [translationPendingIds, setTranslationPendingIds] = useState<string[]>([]);
@@ -1586,15 +1637,24 @@ export function StarLobby({
       return (hash >>> 0) / 4294967295;
     };
     return stories
-      .map((story) => (language === "en" ? applyStoryTranslation(story, translations[story.id]) : story))
+      .map((story) => {
+        const sourceLanguage = detectStoryLanguage(story.body);
+        return {
+          sourceLanguage,
+          story:
+            sourceLanguage === language
+              ? story
+              : applyStoryTranslation(story, translations[language][story.id], language),
+        };
+      })
       .filter(
-        (story) =>
+        ({ story }) =>
           !normalizedQuery ||
           [story.title, story.body, story.city, story.stage, story.theme, story.emotion, story.meaning].some((value) =>
             value.toLocaleLowerCase().includes(normalizedQuery),
           ),
       )
-      .map((story) => ({
+      .map(({ story, sourceLanguage }) => ({
         id: story.id,
         words:
           language === "en"
@@ -1605,14 +1665,14 @@ export function StarLobby({
         categoryLabelEn: story.typeLabelEn,
         cityScore: Math.max(0, Math.min(1, story.cityScore ?? 0.5)),
         isCenterStory: Boolean(story.isCenterStory),
+        sourceLanguage,
         label: story.title,
         desc: story.body,
-        labelEn: translations[story.id]?.title,
-        descEn: translations[story.id]?.body,
-        tags: [...(story.themes ?? [story.theme]), story.city, story.stage].filter(Boolean),
-        tagsEn: translations[story.id]
-          ? [...(story.themes ?? [story.theme]), story.city, story.stage].filter(Boolean)
-          : undefined,
+        tags: storyPanelTags(story),
+        gender: story.gender,
+        age: story.age,
+        city: story.city,
+        cityNameEn: story.cityNameEn,
         ownedByCurrentUser: ownedStoryIds.includes(story.id),
         liked: reactions[story.id] === "like",
         angle: stableFraction(story.id, 17) * Math.PI * 2,
@@ -1629,47 +1689,67 @@ export function StarLobby({
   }, [stories, ownedStoryIds, reactions, query, language, translations]);
 
   useEffect(() => {
-    const cached = Object.fromEntries(
-      stories.filter((story) => story.translationEn).map((story) => [story.id, story.translationEn!]),
-    );
-    if (Object.keys(cached).length) setTranslations((current) => ({ ...current, ...cached }));
+    const cached = cachedTranslationsFromStories(stories);
+    if (!Object.keys(cached.zh).length && !Object.keys(cached.en).length) return;
+    setTranslations((current) => ({
+      zh: { ...current.zh, ...cached.zh },
+      en: { ...current.en, ...cached.en },
+    }));
   }, [stories]);
 
   useEffect(() => {
-    // Entering English is an explicit retry opportunity after a temporary background failure.
-    if (previousLanguage.current !== language && language === "en") setTranslationFailedIds([]);
+    // 切换语言是一次明确的重试机会，避免临时失败让用户一直看到原文。
+    if (previousLanguage.current !== language) setTranslationFailedIds([]);
     previousLanguage.current = language;
   }, [language]);
 
   useEffect(() => {
-    // Prefetch while the Chinese lobby is already visible, so a later language switch is normally instant.
-    const missingIds = stories
-      .map((story) => story.id)
-      .filter(
-        (storyId) =>
-          !translations[storyId] &&
-          !translationInFlight.current.has(storyId) &&
-          !translationFailedIds.includes(storyId),
-      );
-    if (!missingIds.length) return;
-    missingIds.forEach((storyId) => translationInFlight.current.add(storyId));
-    setTranslationPendingIds((current) => [...new Set([...current, ...missingIds])]);
-    const batches = Array.from({ length: Math.ceil(missingIds.length / 5) }, (_, index) =>
-      missingIds.slice(index * 5, index * 5 + 5),
-    );
-    void Promise.allSettled(batches.map((batch) => dataService.translateStories(batch))).then((results) => {
-      const completed = results.flatMap((result) =>
-        result.status === "fulfilled" ? Object.entries(result.value) : [],
-      );
-      const failed = results.flatMap((result, index) => (result.status === "rejected" ? batches[index] : []));
-      if (completed.length) setTranslations((current) => ({ ...current, ...Object.fromEntries(completed) }));
-      if (failed.length) {
-        console.info("[StoryVerse] Some story translations are temporarily unavailable.");
-        setTranslationFailedIds((current) => [...new Set([...current, ...failed])]);
+    // 每篇故事只预取与原文相反的一个语言版本，使双向切换都优先命中数据库缓存。
+    const missingByLanguage: Record<Language, string[]> = { zh: [], en: [] };
+    for (const story of stories) {
+      const targetLanguage = storyTranslationTarget(story);
+      const requestKey = `${targetLanguage}:${story.id}`;
+      if (
+        !translations[targetLanguage][story.id] &&
+        !translationInFlight.current.has(requestKey) &&
+        !translationFailedIds.includes(story.id)
+      ) {
+        missingByLanguage[targetLanguage].push(story.id);
+        translationInFlight.current.add(requestKey);
       }
-      missingIds.forEach((storyId) => translationInFlight.current.delete(storyId));
-      setTranslationPendingIds((current) => current.filter((storyId) => !missingIds.includes(storyId)));
-    });
+    }
+    const jobs = (["zh", "en"] as const).flatMap((targetLanguage) =>
+      Array.from({ length: Math.ceil(missingByLanguage[targetLanguage].length / 5) }, (_, index) => ({
+        targetLanguage,
+        storyIds: missingByLanguage[targetLanguage].slice(index * 5, index * 5 + 5),
+      })),
+    );
+    if (!jobs.length) return;
+    const missingIds = jobs.flatMap((job) => job.storyIds);
+    setTranslationPendingIds((current) => [...new Set([...current, ...missingIds])]);
+    void Promise.allSettled(jobs.map((job) => dataService.translateStories(job.storyIds, job.targetLanguage))).then(
+      (results) => {
+        const completed: StoryTranslationCache = { zh: {}, en: {} };
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") Object.assign(completed[jobs[index].targetLanguage], result.value);
+        });
+        const failed = results.flatMap((result, index) => (result.status === "rejected" ? jobs[index].storyIds : []));
+        if (Object.keys(completed.zh).length || Object.keys(completed.en).length) {
+          setTranslations((current) => ({
+            zh: { ...current.zh, ...completed.zh },
+            en: { ...current.en, ...completed.en },
+          }));
+        }
+        if (failed.length) {
+          console.info("[StoryVerse] Some story translations are temporarily unavailable.");
+          setTranslationFailedIds((current) => [...new Set([...current, ...failed])]);
+        }
+        jobs.forEach((job) =>
+          job.storyIds.forEach((storyId) => translationInFlight.current.delete(`${job.targetLanguage}:${storyId}`)),
+        );
+        setTranslationPendingIds((current) => current.filter((storyId) => !missingIds.includes(storyId)));
+      },
+    );
   }, [language, stories, translations, translationFailedIds]);
 
   const selectedNode = selected ? (nodes.find((node) => node.id === selected.id) ?? selected) : null;
@@ -1975,6 +2055,7 @@ export function StarLobby({
             <span className="lang-divider" />
             <span className={language === "en" ? "lang-primary" : "lang-secondary"}>ENG</span>
           </button>
+          <AuthenticatedGreeting displayName={displayName} language={language} />
           <ExpandingSearch
             language={language}
             query={query}
@@ -2013,8 +2094,10 @@ export function StarLobby({
             await onReactionChange?.(storyId, reaction);
           }}
           onReportStory={onReportStory}
-          translationPending={language === "en" && translationPendingIds.includes(selectedNode.id)}
-          translationFailed={language === "en" && translationFailedIds.includes(selectedNode.id)}
+          translationPending={
+            selectedNode.sourceLanguage !== language && translationPendingIds.includes(selectedNode.id)
+          }
+          translationFailed={selectedNode.sourceLanguage !== language && translationFailedIds.includes(selectedNode.id)}
         />
       )}
       {activeView === "resonance" && (
@@ -2044,6 +2127,7 @@ export function StarLobby({
         onLogout={onLogout ?? onHome}
         inbox={inbox}
         onMarkInboxRead={() => onMarkInboxRead?.()}
+        onDisplayNameChange={onDisplayNameChange}
       />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
       {/*

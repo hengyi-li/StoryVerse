@@ -122,24 +122,54 @@ serve(async (request) => {
     });
   }
 
-  const oldThemes = Array.isArray(story.final_themes) ? story.final_themes.map(String) : [];
-  if (story.moderation_decision === "pass" && oldThemes.join("\u0000") !== labels.themes.join("\u0000")) {
-    const themeEmbedding = await createEmbedding(labels.themes.join(" / "));
-    const { error } = await admin
-      .from("story_embeddings")
-      .update({
-        theme_embedding: themeEmbedding,
-        theme_hash: await sha256(labels.themes.join("\u0000")),
-        model: arkModelInfo().embedding,
-        model_version: arkModelInfo().embedding,
-        generated_at: new Date().toISOString(),
-      })
-      .eq("story_id", story.id);
-    if (error) throw error;
-  }
-
   const nextStatus = story.moderation_decision === "pass" ? "published" : "pending_review";
   const finalTitle = draft.title || story.ai_suggested_title || "我的故事";
+  const oldThemes = Array.isArray(story.final_themes) ? story.final_themes.map(String) : [];
+  if (story.moderation_decision === "pass") {
+    try {
+      const { data: existingEmbedding, error: existingEmbeddingError } = await admin
+        .from("story_embeddings")
+        .select("story_id")
+        .eq("story_id", story.id)
+        .maybeSingle();
+      if (existingEmbeddingError) throw existingEmbeddingError;
+
+      const model = arkModelInfo().embedding;
+      if (!existingEmbedding) {
+        const [storyEmbedding, themeEmbedding] = await Promise.all([
+          createEmbedding(`${finalTitle}\n${draft.body}`),
+          createEmbedding(labels.themes.join(" / ")),
+        ]);
+        const { error } = await admin.from("story_embeddings").insert({
+          story_id: story.id,
+          story_embedding: storyEmbedding,
+          theme_embedding: themeEmbedding,
+          model,
+          model_version: model,
+          content_hash: contentHash,
+          theme_hash: await sha256(labels.themes.join("\u0000")),
+          generated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+      } else if (oldThemes.join("\u0000") !== labels.themes.join("\u0000")) {
+        const themeEmbedding = await createEmbedding(labels.themes.join(" / "));
+        const { error } = await admin
+          .from("story_embeddings")
+          .update({
+            theme_embedding: themeEmbedding,
+            theme_hash: await sha256(labels.themes.join("\u0000")),
+            model,
+            model_version: model,
+            generated_at: new Date().toISOString(),
+          })
+          .eq("story_id", story.id);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Story embedding failed after moderation passed; publishing without vectors", error);
+    }
+  }
+
   const { data: confirmed, error: confirmError } = await admin
     .from("stories")
     .update({

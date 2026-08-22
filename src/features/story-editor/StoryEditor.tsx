@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ExternalLink, Eye, LoaderCircle, MapPin, Mic, RefreshCw, Sparkles, X } from "lucide-react";
 import { LanguageSelect, AppLogo, Pill, PrimaryButton, ThemeToggle } from "../../components/AppControls";
+import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { uiCopy as copy } from "../../data/interface-content";
 import { guides } from "../../data/story-content";
 import { extractHints } from "../../lib/story-hints";
@@ -48,6 +49,7 @@ import type { AppUpdate, ThemeMode } from "../../types/ui";
 
 export function StoryEditor({
   state,
+  displayName,
   update,
   onPublished,
   onPendingReview,
@@ -59,6 +61,7 @@ export function StoryEditor({
   onTourSkip,
 }: {
   state: AppState;
+  displayName: string;
   update: AppUpdate;
   onPublished: (draft: StoryDraft, analysis: NonNullable<AppState["analysis"]>) => Promise<void>;
   onPendingReview: (storyId: string) => Promise<void>;
@@ -778,6 +781,7 @@ ${text}`
                 update({ language: nextLanguage });
               }}
             />
+            <AuthenticatedGreeting displayName={displayName} language={language} />
           </div>
         </header>
       )}
@@ -786,17 +790,7 @@ ${text}`
         <section className="story-editor-stage">
           <div className="section-intro guide-intro-copy">
             <p className="eyebrow">{text.guideStep}</p>
-            <h1>
-              {language === "zh" ? (
-                <>
-                  你最想讲的
-                  <br />
-                  那个故事是什么？
-                </>
-              ) : (
-                text.guideTitle
-              )}
-            </h1>
+            <h1>{text.guideTitle}</h1>
             <p>{text.guideSub}</p>
           </div>
           <GuideStack draft={draft} updateDraft={updateDraft} language={language} />
@@ -1084,8 +1078,8 @@ ${text}`
                       ? `还差一点：记得填${missingCollection.join("、")}。`
                       : `Almost there: remember to fill out ${missingCollection.join(", ")}.`
                     : language === "zh"
-                      ? "完善故事信息后，就可以生成你的故事页面。"
-                      : "Complete the story details to generate your story page."}
+                      ? "接下来将进入AI主题分析界面，请确认你的基本故事情节、人物、时间、地点准确哦"
+                      : "Next, you’ll enter AI theme analysis. Please check that the story’s basic plot, people, time, and place are accurate."}
                 </span>
                 <PrimaryButton onClick={startAnalysis}>{text.ai}</PrimaryButton>
               </div>
@@ -1596,6 +1590,9 @@ ${text}`
                   </div>
                 )}
               </div>
+              <p className="comic-privacy" role="note">
+                {text.imgAiDisclaimer}
+              </p>
               {storyImage && (
                 <div className="comic-actions">
                   <button

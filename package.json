@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:local": "node scripts/dev-local.mjs",
-    "build": "tsc --noEmit && vite build && cp dist/index.html dist/404.html",
+    "build": "tsc --noEmit && vite build",
+    "build:cloudbase": "npm test && npm run build && node scripts/verify-cloudbase-build.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview",
@@ -21,10 +22,13 @@
     "qa:online-image": "node scripts/qa-online-image.mjs",
     "qa:online-smoke": "node scripts/qa-online-smoke.mjs",
     "qa:online-story-recovery": "node scripts/qa-online-story-recovery.mjs",
+    "qa:mainland-connectivity": "node scripts/qa-mainland-connectivity.mjs",
     "qa:ark-translation": "node scripts/qa-ark-translation.mjs",
+    "translations:backfill": "node scripts/backfill-story-translations-online.mjs",
     "qa:online-analytics": "node scripts/qa-online-analytics.mjs",
     "qa:online-analytics-journey": "node scripts/qa-online-analytics-journey.mjs",
     "qa:moderation": "node scripts/qa-local-moderation.mjs",
+    "qa:review-release": "node scripts/qa-local-review-release.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env.local",
     "types:generate": "supabase gen types typescript --local > src/types/database.generated.ts"
   },

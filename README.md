@@ -14,7 +14,8 @@ StoryVerse 是一个人生故事社区。前端保留 React、TypeScript、Vite 
 - IPWhois：只给出城市建议，不保存完整 IP。
 - 浏览器 `SpeechRecognition`：语音转文字，StoryVerse 不上传录音。
 
-详细设计见 [架构说明](docs/architecture.md) 与 [页面和用户旅程](docs/site-overview.md)。
+详细设计见 [架构说明](docs/architecture.md)、[页面和用户旅程](docs/site-overview.md) 与
+[腾讯云部署手册](docs/deployment/tencent-cloud.md)。
 
 ## 目录
 
@@ -71,8 +72,9 @@ ARK_TEXT_MODEL=doubao-seed-evolving
 ARK_EMBEDDING_MODEL=doubao-embedding-vision-251215
 ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://chelsealeezc.github.io
+FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com
 STORYVERSE_WORKER_TOKEN=使用密码管理器生成的至少64位随机字符串
+STORYVERSE_MONITOR_TOKEN=使用密码管理器生成的至少32位随机字符串
 ```
 
 Supabase 会自动为函数注入 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEYS` 和 `SUPABASE_SECRET_KEYS`。StoryVerse 只读取两个 Key 集合中的 `default` 项，不再依赖旧的 `anon` 或 `service_role` Key。不要把这些值写入仓库。
@@ -121,18 +123,37 @@ update public.profiles set role = 'admin' where username = '你的账号';
 
 普通故事提交会写入 Queue 并在当前请求中立即处理；冷启动批量导入只入队，避免一次请求超时。部署后需要按 [supabase/worker-cron.example.sql](supabase/worker-cron.example.sql) 配置每分钟 Worker 调用。定时任务只使用独立的 `STORYVERSE_WORKER_TOKEN`，不接触数据库管理员 Key。
 
+## 腾讯云前端发布
+
+正式前端使用腾讯云 CloudBase 静态网站托管，GitHub `main` 分支是自动部署来源。CloudBase 使用：
+
+```text
+Node.js       22
+安装命令      npm ci
+构建命令      npm run build:cloudbase
+输出目录      dist
+部署路径      /
+```
+
+CloudBase 构建环境必须填写 `.env.example` 中的前端变量，并固定 `VITE_BASE_PATH=/`。取得腾讯云默认域名后，还要把完整 Origin 加入线上 `FRONTEND_ORIGINS` 和 Supabase Auth Redirect URL；只上传前端文件并不能完成后端授权。
+
+当前 CloudBase 生产候选环境为 `storyverse-prod-d9f1q8jqe812448d`，测试域名为 <https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com>。
+
+GitHub Pages 已退出发布链路。深层路由由 CloudBase 将错误文档/SPA 回退配置为 `index.html`，不再生成或依赖 `404.html`。完整控制台步骤、缓存策略、拨测与回滚见 [腾讯云部署手册](docs/deployment/tencent-cloud.md)。
+
 ## 验证
 
 ```bash
 npm test
 npm run db:test
 npm run build
+npm run build:cloudbase
 npm run format:check
 ```
 
 - Vitest 覆盖新用户准入、100–1500 字、必填字段、21 类和主题规则等。
 - pgTAP 覆盖核心表、RLS 策略、21 类种子和距离/阶段函数。
-- `npm run build` 先做 TypeScript 检查，再生成 `dist/` 和 GitHub Pages 的 `404.html`。
+- `npm run build` 做 TypeScript 检查并生成 `dist/`；`npm run build:cloudbase` 额外执行测试、根路径和密钥扫描。
 - `docs/visual-baseline/` 保存桌面、移动端、StoryStart、StoryWrite 和 StoryPage 的视觉回归基线。
 
-GitHub Pages 只托管静态前端；数据库和 Edge Functions 由 Supabase 托管。生产构建中不应出现 Service Role、火山方舟 Key、高德 Key或其他私密凭据。
+CloudBase 只托管静态前端；数据库和 Edge Functions 仍由 Supabase 托管。生产构建中不应出现 Service Role、火山方舟 Key、高德 Key、腾讯云 SecretKey 或其他私密凭据。

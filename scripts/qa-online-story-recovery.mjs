@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const projectUrl = `https://${PROJECT_REF}.supabase.co`;
-const allowedOrigin = "https://chelsealeezc.github.io";
+const allowedOrigin = requiredFrontendOrigin();
 
 function check(condition, label) {
   if (!condition) throw new Error(label);

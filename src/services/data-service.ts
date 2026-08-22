@@ -1,5 +1,6 @@
 import { assertSupabaseConfigured, supabase } from "../lib/supabase";
 import { geographicCityScore } from "../lib/geo-distance";
+import { cityByName } from "../data/cities";
 import type {
   InboxMessage,
   ResonancePreferences,
@@ -7,6 +8,7 @@ import type {
   Story,
   StoryAnalysis,
   StoryDraft,
+  Language,
   StoryReaction,
   StoryStatus,
   StoryTranslation,
@@ -259,23 +261,34 @@ export function storyProgressFromRow(
   };
 }
 
-export function applyStoryTranslation(story: Story, translation?: StoryTranslation): Story {
+export function applyStoryTranslation(
+  story: Story,
+  translation: StoryTranslation | undefined,
+  targetLanguage: Language,
+): Story {
   if (!translation) return story;
   const themes = translation.themes.length ? translation.themes : story.themes;
+  const readLength =
+    targetLanguage === "en"
+      ? translation.body.trim().split(/\s+/).filter(Boolean).length
+      : Array.from(translation.body.trim()).length;
   return {
     ...story,
     title: translation.title,
     excerpt: translation.excerpt,
     body: translation.body,
-    city: translation.city || story.cityNameEn || story.city,
+    city:
+      targetLanguage === "en"
+        ? story.cityNameEn || cityByName.get(story.city)?.nameEn || translation.city || story.city
+        : translation.city || story.city,
     stage: translation.stage || story.stage,
     emotion: translation.emotion || story.emotion,
     people: translation.people.length ? translation.people : story.people,
     themes,
     theme: themes?.[0] || story.theme,
     meaning: themes?.[1] || story.meaning,
-    perspective: "Life experience",
-    readMinutes: Math.max(1, Math.ceil(translation.body.trim().split(/\s+/).filter(Boolean).length / 220)),
+    perspective: targetLanguage === "en" ? "Life experience" : "人生经验",
+    readMinutes: Math.max(1, Math.ceil(readLength / (targetLanguage === "en" ? 220 : 420))),
   };
 }
 
@@ -576,19 +589,25 @@ export const dataService = {
     if (!storyIds.length) return merged;
     const { data: translationRows, error: translationError } = await supabase
       .from("story_translations")
-      .select("story_id,title,excerpt,body,themes,mood,life_stage,people,city,updated_at")
-      .in("story_id", storyIds)
-      .eq("target_language", "en");
+      .select("story_id,target_language,title,excerpt,body,themes,mood,life_stage,people,city,updated_at")
+      .in("story_id", storyIds);
     if (translationError) {
       console.info("[StoryVerse] Cached story translations could not be loaded.", translationError);
       return merged;
     }
-    const translations = new Map(
-      (translationRows ?? []).map((row) => [String(row.story_id), storyTranslationFromRow(row)]),
-    );
+    const translations = new Map<string, Partial<Record<Language, StoryTranslation>>>();
+    for (const row of translationRows ?? []) {
+      const targetLanguage = String(row.target_language);
+      if (targetLanguage !== "zh" && targetLanguage !== "en") continue;
+      const storyId = String(row.story_id);
+      translations.set(storyId, {
+        ...translations.get(storyId),
+        [targetLanguage]: storyTranslationFromRow(row),
+      });
+    }
     return merged.map((item) => ({
       ...item,
-      story: { ...item.story, translationEn: translations.get(item.story.id) },
+      story: { ...item.story, translations: translations.get(item.story.id) },
     }));
   },
 
@@ -602,11 +621,11 @@ export const dataService = {
   },
   createReport: (storyId: string, reason: string, note: string) => invoke("reports", { storyId, reason, note }),
 
-  translateStories: async (storyIds: string[]) => {
+  translateStories: async (storyIds: string[], targetLanguage: Language) => {
     if (!storyIds.length) return {} as Record<string, StoryTranslation>;
     const { translations } = await invoke<{ translations: Record<string, StoryTranslation> }>("story-translate", {
       storyIds,
-      targetLanguage: "en",
+      targetLanguage,
     });
     return translations;
   },

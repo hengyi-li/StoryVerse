@@ -14,12 +14,12 @@
 
 ## 2. 测试环境与证据
 
-| 环境          | 地址/目标                   | 用途                                         |
-| ------------- | --------------------------- | -------------------------------------------- |
-| 本地前端      | `http://127.0.0.1:4175/`    | 完整业务、视觉、异常与破坏性测试             |
-| 本地 Supabase | `http://127.0.0.1:54321`    | 数据库、RLS、Functions、Storage、真实 AI E2E |
-| 线上 Supabase | 项目 `zgyrbtdyraxglxhbkazp` | 隔离账号冒烟、权限、部署、数据一致性         |
-| GitHub Pages  | 生产站点                    | 只读页面和真实后端连通性；未经允许不部署前端 |
+| 环境             | 地址/目标                   | 用途                                         |
+| ---------------- | --------------------------- | -------------------------------------------- |
+| 本地前端         | `http://127.0.0.1:4175/`    | 完整业务、视觉、异常与破坏性测试             |
+| 本地 Supabase    | `http://127.0.0.1:54321`    | 数据库、RLS、Functions、Storage、真实 AI E2E |
+| 线上 Supabase    | 项目 `zgyrbtdyraxglxhbkazp` | 隔离账号冒烟、权限、部署、数据一致性         |
+| 腾讯云 CloudBase | 生产候选站点                | 静态前端、深层路由、大陆访问和真实后端连通性 |
 
 每轮必须保留：测试命令结果、失败复现步骤、浏览器截图、数据库计数、Storage 一致性、迁移/Function 版本、修复文件与回归结果。不得在证据中输出密码、Token、Service Role 或火山方舟 Key。
 
@@ -48,20 +48,20 @@
 
 ### A. 启动、构建与路由
 
-| ID     | 场景与边界                                                         | 通过标准                                                 |
-| ------ | ------------------------------------------------------------------ | -------------------------------------------------------- |
-| ENV-01 | 全新安装后 `npm run build`                                         | TypeScript 和 Vite 成功，生成 `index.html` 与 `404.html` |
-| ENV-02 | 本地 Supabase/Functions/前端启动                                   | 端口可达，无密钥配置报错                                 |
-| ENV-03 | `/`、`/StoryStart`、`/StoryWrite`、`/StoryAnalyzing`、`/StoryPage` | 路由与步骤一致，刷新不白屏                               |
-| ENV-04 | `/Resonance`、`/Recommendations`、`/StarLobby`                     | 未完成首篇故事时回到写故事；完成后可进入                 |
-| ENV-05 | `/Admin` 普通用户/管理员/未登录                                    | 未登录显示管理员登录门；普通用户拒绝；管理员进入后台     |
-| ENV-06 | 未知路径、末尾 `/`、GitHub Pages `/StoryVerse/*`                   | 正确归一化或回首页，不产生 404 白屏                      |
-| ENV-07 | 浏览器返回/前进跨越全部页面                                        | URL 与页面状态同步，不重复提交                           |
-| ENV-08 | 页面刷新、硬刷新、直接粘贴深链接                                   | 会话、草稿和必要业务门槛恢复正确                         |
-| ENV-09 | 按需加载检查                                                       | 首屏不预载 StoryEditor/StarLobby/Admin 大模块            |
-| ENV-10 | 静态资源检查                                                       | WebP/SVG 全部 200，无旧 PNG/JPG 404                      |
-| ENV-11 | 浏览器控制台与网络                                                 | 无未处理异常、React key/hydration 警告、循环请求         |
-| ENV-12 | Supabase/AI Key 构建扫描                                           | 前端产物不存在真实服务端密钥                             |
+| ID     | 场景与边界                                                         | 通过标准                                             |
+| ------ | ------------------------------------------------------------------ | ---------------------------------------------------- |
+| ENV-01 | 全新安装后 `npm run build`                                         | TypeScript 和 Vite 成功，生成根路径 `index.html`     |
+| ENV-02 | 本地 Supabase/Functions/前端启动                                   | 端口可达，无密钥配置报错                             |
+| ENV-03 | `/`、`/StoryStart`、`/StoryWrite`、`/StoryAnalyzing`、`/StoryPage` | 路由与步骤一致，刷新不白屏                           |
+| ENV-04 | `/Resonance`、`/Recommendations`、`/StarLobby`                     | 未完成首篇故事时回到写故事；完成后可进入             |
+| ENV-05 | `/Admin` 普通用户/管理员/未登录                                    | 未登录显示管理员登录门；普通用户拒绝；管理员进入后台 |
+| ENV-06 | 未知路径、末尾 `/`、CloudBase 深层路径刷新                         | SPA 回退到 `index.html`，应用正确归一化或回首页      |
+| ENV-07 | 浏览器返回/前进跨越全部页面                                        | URL 与页面状态同步，不重复提交                       |
+| ENV-08 | 页面刷新、硬刷新、直接粘贴深链接                                   | 会话、草稿和必要业务门槛恢复正确                     |
+| ENV-09 | 按需加载检查                                                       | 首屏不预载 StoryEditor/StarLobby/Admin 大模块        |
+| ENV-10 | 静态资源检查                                                       | WebP/SVG 全部 200，无旧 PNG/JPG 404                  |
+| ENV-11 | 浏览器控制台与网络                                                 | 无未处理异常、React key/hydration 警告、循环请求     |
+| ENV-12 | Supabase/AI Key 构建扫描                                           | 前端产物不存在真实服务端密钥                         |
 
 ### B. 首页、注册门与公开信息
 
@@ -308,7 +308,7 @@
 | SEC-10 | 过期/伪造 Token 与 publishable key 当 Bearer         | 401，不返回内部错误                                          |
 | SEC-11 | 所有 Functions 错误 HTTP 方法                        | 405；OPTIONS 正确 CORS                                       |
 | SEC-12 | 非法 JSON、空 body、超大 body                        | 400/平台限制，不返回堆栈                                     |
-| SEC-13 | CORS 允许本地与 GitHub Pages，陌生 Origin            | 只回显允许列表中的 Origin                                    |
+| SEC-13 | CORS 允许本地与 `FRONTEND_ORIGINS`，陌生 Origin      | 只回显显式允许列表中的 Origin；生产域名不硬编码              |
 | SEC-14 | SQL 注入/XSS/路径穿越/Storage 文件名                 | 参数化、转义、UUID 路径，无执行                              |
 | SEC-15 | IDOR：故事、审核、任务、账号、通知 ID                | 普通用户无法操作他人资源                                     |
 | SEC-16 | Service Role、火山 Key、worker token                 | 只在 Functions secrets；不在 Git、网络响应或 bundle          |

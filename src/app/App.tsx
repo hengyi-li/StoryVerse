@@ -9,9 +9,12 @@ import {
   externalPath,
   guardBlankEditorAfterSubmission,
   guardPostPublishScreenForFirstStory,
+  isStoryEditorRoute,
   normalizedPath,
   pathFromState,
+  pickStoryForDirectStoryPage,
   routePatchFromPath,
+  safeDirectStoryEditorStep,
   shouldAutosaveDraft,
   storyEditorStepForProgress,
 } from "./routes";
@@ -76,6 +79,9 @@ export default function App() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [localStories, setLocalStories] = useState<Story[]>([]);
   const [ownedStoryIds, setOwnedStoryIds] = useState<string[]>([]);
+  const [directStoryRoute, setDirectStoryRoute] = useState(() =>
+    typeof window !== "undefined" ? isStoryEditorRoute() : false,
+  );
   const lastPathRef = useRef<string>(typeof window !== "undefined" ? normalizedPath() : "/");
   const poppingRef = useRef(false);
   const analyticsPageRef = useRef("");
@@ -126,15 +132,22 @@ export default function App() {
       .then(async ({ user: currentUser }) => {
         if (!active) return;
         setUser(currentUser);
-        const [savedDraft, storyProgress, resonance, storyList, ownedStories, inbox, reactions] = await Promise.all([
-          dataService.getCurrentDraft(),
-          loadRecoverableStory(currentUser.id, state.accountScopeId, state.analysis?.id),
-          dataService.getResonancePreferences(),
-          dataService.listLobbyStories().then((items) => items.map((item) => item.story)),
-          dataService.listOwnedStories(),
-          dataService.listNotifications(),
-          dataService.listReactions(),
-        ]);
+        const [savedDraft, loadedStoryProgress, resonance, storyList, ownedStories, inbox, reactions] =
+          await Promise.all([
+            dataService.getCurrentDraft(),
+            loadRecoverableStory(currentUser.id, state.accountScopeId, state.analysis?.id),
+            dataService.getResonancePreferences(),
+            dataService.listLobbyStories().then((items) => items.map((item) => item.story)),
+            dataService.listOwnedStories(),
+            dataService.listNotifications(),
+            dataService.listReactions(),
+          ]);
+        if (!active) return;
+        let storyProgress = loadedStoryProgress;
+        if (directStoryRoute && state.storyEditorStep === 3 && !storyProgress) {
+          const fallbackStory = pickStoryForDirectStoryPage(ownedStories);
+          if (fallbackStory) storyProgress = await dataService.getStoryProgress(fallbackStory.id);
+        }
         if (!active) return;
         setLocalStories(storyList);
         setOwnedStoryIds(ownedStories.map((story) => story.id));
@@ -153,6 +166,7 @@ export default function App() {
                 hasSubmittedStory,
                 hasDraftContent: Boolean(savedDraft?.title.trim() || savedDraft?.body.trim()),
                 hasStoryProgress: Boolean(storyProgress),
+                allowDirectStoryRoute: directStoryRoute,
               });
           const wasRedirectedToFirstStory = screen !== previous.screen && screen === "storyEditor";
           return {
@@ -163,14 +177,47 @@ export default function App() {
               ? {
                   draft: { ...initialState.draft, ...storyProgress.draft },
                   analysis: storyProgress.analysis,
-                  ...(progressStep !== null ? { storyEditorStep: progressStep } : {}),
+                  ...(progressStep !== null
+                    ? { storyEditorStep: progressStep }
+                    : directStoryRoute
+                      ? {
+                          storyEditorStep: safeDirectStoryEditorStep({
+                            requestedStep: previous.storyEditorStep,
+                            hasDraftContent: Boolean(
+                              storyProgress.draft.title.trim() || storyProgress.draft.body.trim(),
+                            ),
+                            hasAnalysis: true,
+                          }),
+                        }
+                      : {}),
                 }
               : savedDraft
-                ? { draft: { ...initialState.draft, ...savedDraft } }
+                ? {
+                    draft: { ...initialState.draft, ...savedDraft },
+                    ...(directStoryRoute
+                      ? {
+                          storyEditorStep: safeDirectStoryEditorStep({
+                            requestedStep: previous.storyEditorStep,
+                            hasDraftContent: Boolean(savedDraft.title.trim() || savedDraft.body.trim()),
+                            hasAnalysis: false,
+                          }),
+                        }
+                      : {}),
+                  }
                 : {
                     draft: { ...initialState.draft, startedAt: Date.now() },
                     analysis: null,
-                    ...(wasRedirectedToFirstStory ? { storyEditorStep: 0 as const } : {}),
+                    ...(directStoryRoute
+                      ? {
+                          storyEditorStep: safeDirectStoryEditorStep({
+                            requestedStep: previous.storyEditorStep,
+                            hasDraftContent: false,
+                            hasAnalysis: false,
+                          }),
+                        }
+                      : wasRedirectedToFirstStory
+                        ? { storyEditorStep: 0 as const }
+                        : {}),
                   }),
             resonance,
             inbox,
@@ -183,12 +230,24 @@ export default function App() {
       .catch(async () => {
         const recovery = await loadRecoveryDraft().catch(() => undefined);
         if (!active) return;
-        update((previous) => ({
-          ...(recovery?.body.trim() ? { draft: { ...initialState.draft, ...recovery } } : {}),
-          ...(["resonance", "recommendations", "starLobby"].includes(previous.screen)
-            ? { screen: "intro" as const }
-            : {}),
-        }));
+        update((previous) => {
+          const recoveredDraft = recovery?.body.trim() ? { ...initialState.draft, ...recovery } : previous.draft;
+          return {
+            ...(recovery?.body.trim() ? { draft: recoveredDraft } : {}),
+            ...(directStoryRoute
+              ? {
+                  storyEditorStep: safeDirectStoryEditorStep({
+                    requestedStep: previous.storyEditorStep,
+                    hasDraftContent: Boolean(recoveredDraft.title.trim() || recoveredDraft.body.trim()),
+                    hasAnalysis: Boolean(previous.analysis),
+                  }),
+                }
+              : {}),
+            ...(["resonance", "recommendations", "starLobby"].includes(previous.screen)
+              ? { screen: "intro" as const }
+              : {}),
+          };
+        });
         setSessionChecked(true);
       });
     return () => {
@@ -250,6 +309,7 @@ export default function App() {
     const onPop = () => {
       const route = routePatchFromPath();
       poppingRef.current = true;
+      setDirectStoryRoute(isStoryEditorRoute());
       if (route.gatewaySection) setGatewaySection(route.gatewaySection);
       if (route.authMode) setAuthMode(route.authMode);
       const { gatewaySection: _gatewaySection, authMode: _authMode, ...statePatch } = route;
@@ -271,6 +331,7 @@ export default function App() {
     poppingRef.current = false;
   }, [state.screen, state.storyEditorStep, gatewaySection, authMode]);
   const goHome = () => {
+    setDirectStoryRoute(false);
     setGatewaySection("intro");
     update({ screen: "intro" });
   };
@@ -282,6 +343,7 @@ export default function App() {
       hasSubmittedStory: state.hasCompletedFirstStory,
       hasDraftContent: Boolean(state.draft.title.trim() || state.draft.body.trim()),
       hasStoryProgress: Boolean(state.analysis),
+      allowDirectStoryRoute: directStoryRoute,
     });
     if (guardedScreen === state.screen) return;
     update({ screen: user ? guardedScreen : "intro" });
@@ -293,8 +355,10 @@ export default function App() {
     state.draft.title,
     state.draft.body,
     state.analysis?.id,
+    directStoryRoute,
   ]);
   const enterStarLobby = () => {
+    setDirectStoryRoute(false);
     if (!user) {
       goHome();
       return;
@@ -490,6 +554,7 @@ export default function App() {
         <AdminConsole
           language={state.language}
           themeMode={themeMode}
+          displayName={user.displayName}
           onLogout={() => {
             void dataService.logout().finally(() => {
               setUser(null);
@@ -539,6 +604,7 @@ export default function App() {
     content = (
       <StoryEditor
         state={state}
+        displayName={user?.displayName ?? ""}
         update={update}
         onPublished={publishStory}
         onPendingReview={continueAfterPendingReview}
@@ -554,6 +620,7 @@ export default function App() {
     content = (
       <ResonancePage
         state={state}
+        displayName={user?.displayName ?? ""}
         update={update}
         onBack={() => update({ screen: "storyEditor", storyEditorStep: 3 })}
         onContinue={() => {
@@ -574,6 +641,7 @@ export default function App() {
     content = (
       <RecommendationsPage
         state={state}
+        displayName={user?.displayName ?? ""}
         update={update}
         onEnterStarLobby={enterStarLobby}
         onHome={goHome}
@@ -585,6 +653,7 @@ export default function App() {
     content = (
       <StarLobby
         language={state.language}
+        displayName={user?.displayName ?? ""}
         themeMode={themeMode}
         onLanguageChange={changeLanguage}
         onThemeModeChange={changeThemeMode}
@@ -652,6 +721,9 @@ export default function App() {
         onMarkInboxRead={() => {
           void dataService.markNotificationsRead();
           update((previous) => ({ inbox: previous.inbox.map((m) => ({ ...m, read: true })) }));
+        }}
+        onDisplayNameChange={(displayName) => {
+          setUser((previous) => (previous ? { ...previous, displayName } : previous));
         }}
       />
     );

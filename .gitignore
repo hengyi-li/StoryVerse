@@ -12,6 +12,7 @@ vite.config.d.ts
 .env
 .env.*
 !.env.example
+!.env.cloudbase.example
 !supabase/functions/.env.example
 
 # Cold-start source files contain real story text and import metadata.

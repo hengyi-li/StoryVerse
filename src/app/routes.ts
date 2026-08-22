@@ -1,4 +1,4 @@
-import type { AppState, ScreenId, StoryEditorStep, StoryStatus } from "../types/domain";
+import type { AppState, ScreenId, Story, StoryEditorStep, StoryStatus } from "../types/domain";
 import type { AuthMode, GatewaySection } from "../types/ui";
 
 const routeMap = {
@@ -20,8 +20,7 @@ export function externalPath(path: string) {
 }
 
 export function normalizedPath(pathname = window.location.pathname) {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return path.startsWith("/StoryVerse/") ? path.slice("/StoryVerse".length) || "/" : path;
+  return pathname.replace(/\/+$/, "") || "/";
 }
 
 export function routePatchFromPath(pathname = window.location.pathname): Partial<AppState> & {
@@ -38,6 +37,35 @@ export function routePatchFromPath(pathname = window.location.pathname): Partial
   if (path === routeMap.starLobby) return { screen: "starLobby" };
   if (path === routeMap.admin) return { screen: "admin" };
   return { screen: "intro", gatewaySection: "intro" };
+}
+
+export function isStoryEditorRoute(pathname = window.location.pathname) {
+  const path = normalizedPath(pathname);
+  return [routeMap.storyStart, routeMap.storyWrite, routeMap.storyAnalyzing, routeMap.storyPage].includes(
+    path as (typeof routeMap)["storyStart" | "storyWrite" | "storyAnalyzing" | "storyPage"],
+  );
+}
+
+/** 直接输入 URL 时，缺少上游数据的页面应回到可继续操作的步骤，不能自动发起 AI 请求。 */
+export function safeDirectStoryEditorStep({
+  requestedStep,
+  hasDraftContent,
+  hasAnalysis,
+}: {
+  requestedStep: StoryEditorStep;
+  hasDraftContent: boolean;
+  hasAnalysis: boolean;
+}): StoryEditorStep {
+  if (requestedStep <= 1 || hasAnalysis) return requestedStep;
+  return hasDraftContent ? 1 : 0;
+}
+
+/**
+ * 直接打开 StoryPage 时优先展示最近一篇已经离开草稿/分析阶段的故事。
+ * listOwnedStories 已按发布时间、创建时间倒序排列，因此保留输入顺序即可。
+ */
+export function pickStoryForDirectStoryPage(stories: Story[]) {
+  return stories.find((story) => story.status !== "draft" && story.status !== "analyzing") ?? stories[0] ?? null;
 }
 
 export function authenticatedEntryScreen({
@@ -70,13 +98,21 @@ export function guardBlankEditorAfterSubmission({
   hasSubmittedStory,
   hasDraftContent,
   hasStoryProgress,
+  allowDirectStoryRoute = false,
 }: {
   screen: ScreenId;
   hasSubmittedStory: boolean;
   hasDraftContent: boolean;
   hasStoryProgress: boolean;
+  allowDirectStoryRoute?: boolean;
 }): ScreenId {
-  return screen === "storyEditor" && hasSubmittedStory && !hasDraftContent && !hasStoryProgress ? "starLobby" : screen;
+  return screen === "storyEditor" &&
+    hasSubmittedStory &&
+    !hasDraftContent &&
+    !hasStoryProgress &&
+    !allowDirectStoryRoute
+    ? "starLobby"
+    : screen;
 }
 
 export function shouldAutosaveDraft(screen: ScreenId, storyEditorStep: number): boolean {
