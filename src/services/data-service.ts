@@ -1,5 +1,6 @@
 import { assertSupabaseConfigured, supabase } from "../lib/supabase";
 import { geographicCityScore } from "../lib/geo-distance";
+import { functionRegionFor } from "../lib/function-region";
 import { cityByName } from "../data/cities";
 import type {
   InboxMessage,
@@ -121,6 +122,7 @@ async function invoke<T>(name: string, body?: unknown, method: "GET" | "POST" = 
   const { data, error } = await supabase.functions.invoke(name, {
     body: body as Record<string, unknown> | undefined,
     method,
+    region: functionRegionFor(name, import.meta.env.VITE_SUPABASE_URL),
   });
   if (error) throw await functionError(error);
   return data as T;
