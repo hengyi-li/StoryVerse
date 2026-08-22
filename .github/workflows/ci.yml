@@ -35,3 +35,29 @@ jobs:
       - run: npm ci
       - run: npx supabase start
       - run: npm run db:test
+
+  browser-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx supabase start
+      - name: Run isolated browser journeys
+        run: npm run e2e:core
+        env:
+          STORYVERSE_FUNCTIONS_ENV_FILE: supabase/functions/.env.example
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            outputs/playwright-artifacts
+            outputs/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14

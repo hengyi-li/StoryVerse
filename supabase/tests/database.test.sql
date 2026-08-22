@@ -449,28 +449,28 @@ insert into public.analytics_events (
   browser, os, app_version, environment, properties
 ) values
   (
-    '40000000-0000-0000-0000-000000000001', 'home_viewed', 'P1', now(),
+    '40000000-0000-0000-0000-000000000001', 'home_viewed', 'P1', '2000-01-01 12:00:00+00',
     '00000000-0000-0000-0000-000000000999', repeat('a', 64),
     '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
     '43000000-0000-0000-0000-000000000001', 'home_intro', '/', 'zh', 'day', 'desktop',
     'test', 'test', 'test', 'test', '{}'
   ),
   (
-    '40000000-0000-0000-0000-000000000002', 'story_input_snapshot', 'P0', now(),
+    '40000000-0000-0000-0000-000000000002', 'story_input_snapshot', 'P0', '2000-01-01 12:00:00+00',
     '00000000-0000-0000-0000-000000000999', repeat('a', 64),
     '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
     '43000000-0000-0000-0000-000000000002', 'story_write', '/StoryWrite', 'zh', 'day', 'desktop',
     'test', 'test', 'test', 'test', '{"was_pasted":true,"title_active_ms":1000,"body_active_ms":2000}'
   ),
   (
-    '40000000-0000-0000-0000-000000000003', 'star_clicked', 'P0', now(),
+    '40000000-0000-0000-0000-000000000003', 'star_clicked', 'P0', '2000-01-01 12:00:00+00',
     '00000000-0000-0000-0000-000000000999', repeat('a', 64),
     '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
     '43000000-0000-0000-0000-000000000003', 'star_lobby', '/StarLobby', 'zh', 'day', 'desktop',
     'test', 'test', 'test', 'test', '{}'
   ),
   (
-    '40000000-0000-0000-0000-000000000004', 'story_read_ended', 'P0', now(),
+    '40000000-0000-0000-0000-000000000004', 'story_read_ended', 'P0', '2000-01-01 12:00:00+00',
     '00000000-0000-0000-0000-000000000998', repeat('b', 64),
     '41000000-0000-0000-0000-000000000002', '42000000-0000-0000-0000-000000000002',
     '43000000-0000-0000-0000-000000000004', 'star_lobby', '/StarLobby', 'zh', 'day', 'desktop',
@@ -478,37 +478,37 @@ insert into public.analytics_events (
   );
 
 select is(
-  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, null) #>> '{overview,participants}')::integer,
+  (public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', null, null, null) #>> '{overview,participants}')::integer,
   2,
   'research dashboard counts distinct participants'
 );
 select is(
-  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', null, null) #>> '{overview,events}')::integer,
+  (public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', '00000000-0000-0000-0000-000000000999', null, null) #>> '{overview,events}')::integer,
   3,
   'account filter returns only the selected account events'
 );
 select is(
-  public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', null, null) #>> '{selected_account,username}',
+  public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', '00000000-0000-0000-0000-000000000999', null, null) #>> '{selected_account,username}',
   'reference_user',
   'account drill-down exposes the human login account'
 );
 select is(
-  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, 'P1', null) #>> '{overview,events}')::integer,
+  (public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', null, 'P1', null) #>> '{overview,events}')::integer,
   1,
   'priority filter is applied to every dashboard section'
 );
 select is(
-  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, 'discovery') #>> '{overview,events}')::integer,
+  (public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', null, null, 'discovery') #>> '{overview,events}')::integer,
   1,
   'behaviour module filter is applied'
 );
 select is(
-  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', 'P0', 'creation') #>> '{overview,events}')::integer,
+  (public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', '00000000-0000-0000-0000-000000000999', 'P0', 'creation') #>> '{overview,events}')::integer,
   1,
   'account, priority and module filters compose correctly'
 );
 select is(
-  jsonb_array_length(public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, null) -> 'accounts'),
+  jsonb_array_length(public.analytics_dashboard('2000-01-01 00:00:00+00', '2000-01-02 00:00:00+00', null, null, null) -> 'accounts'),
   2,
   'active account ranking includes both fixture accounts'
 );

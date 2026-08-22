@@ -4,6 +4,11 @@ import {
   createArkImageGenerationRequest,
   readSingleArkImage,
 } from "../supabase/functions/_shared/image-generation.ts";
+import {
+  STORY_ANALYSIS_MAX_TOKENS,
+  STORY_ANALYSIS_TIMEOUT_MS,
+  STORY_IMAGE_TIMEOUT_MS,
+} from "../supabase/functions/_shared/ai-runtime.ts";
 
 describe("火山方舟图片生成", () => {
   it("强制生成一张 2K 正方形 JPEG，避免模型自动生成组图", () => {
@@ -27,5 +32,11 @@ describe("火山方舟图片生成", () => {
     });
     expect(readSingleArkImage({ data: [] })).toBeNull();
     expect(readSingleArkImage({ data: [{ url: "one" }, { url: "two" }] })).toBeNull();
+  });
+
+  it("限制用户等待的 AI 长尾，同时保留 2K 单图质量", () => {
+    expect(STORY_ANALYSIS_TIMEOUT_MS).toBe(30_000);
+    expect(STORY_ANALYSIS_MAX_TOKENS).toBe(1_200);
+    expect(STORY_IMAGE_TIMEOUT_MS).toBe(90_000);
   });
 });

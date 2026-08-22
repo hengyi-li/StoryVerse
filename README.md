@@ -37,6 +37,7 @@ supabase/
 ├── config.toml              # 本地 Supabase 配置
 └── seed.sql                 # 本地种子入口（不放假故事）
 tests/                       # 前端与服务端纯规则 Vitest 测试
+e2e/                         # Playwright 真实浏览器端到端旅程
 docs/                        # 架构、旅程和变更记录
 ```
 
@@ -146,6 +147,8 @@ GitHub Pages 已退出发布链路。深层路由由 CloudBase 将错误文档/S
 ```bash
 npm test
 npm run db:test
+npm run e2e:core
+npm run e2e:ai
 npm run build
 npm run build:cloudbase
 npm run format:check
@@ -153,7 +156,11 @@ npm run format:check
 
 - Vitest 覆盖新用户准入、100–1500 字、必填字段、21 类和主题规则等。
 - pgTAP 覆盖核心表、RLS 策略、21 类种子和距离/阶段函数。
+- `npm run e2e:core` 使用 Chromium、真实本地 Supabase 和 Edge Functions，覆盖注册/前测、草稿恢复、大厅阅读与反应、后测、管理员权限、移动端和深层路由；测试脚本拒绝连接线上 Supabase。
+- `npm run e2e:ai` 额外调用真实豆包服务，覆盖写作、AI 整理、确认发布、推荐刷新与进入 StarLobby。该命令会产生真实 API 用量，不在普通 CI 中运行。
 - `npm run build` 做 TypeScript 检查并生成 `dist/`；`npm run build:cloudbase` 额外执行测试、根路径和密钥扫描。
 - `docs/visual-baseline/` 保存桌面、移动端、StoryStart、StoryWrite 和 StoryPage 的视觉回归基线。
+
+完整分层、场景矩阵、运行前提及当前覆盖边界见 [测试手册](docs/testing.md)。浏览器失败时会在 `outputs/playwright-artifacts/` 保存截图、录像和 trace，本地产生的测试账号会在用例结束后清理。
 
 CloudBase 只托管静态前端；数据库和 Edge Functions 仍由 Supabase 托管。生产构建中不应出现 Service Role、火山方舟 Key、高德 Key、腾讯云 SecretKey 或其他私密凭据。

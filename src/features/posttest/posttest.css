@@ -244,46 +244,12 @@
   padding: 0 clamp(20px, 4vw, 54px) 22px;
 }
 
-.posttest-scale-header,
 .posttest-item {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) repeat(5, minmax(54px, 0.13fr));
   gap: 8px;
 }
 
-.posttest-scale-header {
-  position: sticky;
-  z-index: 3;
-  top: 0;
-  align-items: end;
-  padding: 12px 0 10px;
-  background: rgba(255, 255, 255, 0.96);
-}
-
-.posttest-page.theme-night .posttest-scale-header {
-  background: rgba(14, 19, 23, 0.97);
-}
-
-.posttest-scale-header > span:not(:first-child) {
-  display: grid;
-  place-items: center;
-  min-height: 54px;
-  color: #1b607b;
-  text-align: center;
-}
-
-.posttest-scale-header b {
-  font-size: 15px;
-}
-
-.posttest-scale-header small {
-  display: grid;
-  margin-top: 3px;
-  font-size: 8px;
-  line-height: 1.15;
-}
-
-.posttest-scale-header i,
 .posttest-score-options i {
   display: block;
   font-style: normal;
@@ -602,10 +568,6 @@
 
   .posttest-matrix {
     padding: 0 14px 12px;
-  }
-
-  .posttest-scale-header {
-    display: none;
   }
 
   .posttest-item {

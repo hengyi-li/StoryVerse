@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const cwd = process.cwd();
-const functionsEnvFile = resolve(cwd, "supabase/functions/.env.local");
+const functionsEnvFile = resolve(cwd, process.env.STORYVERSE_FUNCTIONS_ENV_FILE || "supabase/functions/.env.local");
 
 const statusResult = spawnSync("npx", ["supabase", "status", "-o", "json"], {
   cwd,
@@ -31,7 +31,7 @@ if (!/^\d{4,5}$/.test(port)) {
 }
 
 if (!existsSync(functionsEnvFile)) {
-  process.stderr.write("缺少 supabase/functions/.env.local。本地 AI 与图片功能需要先配置该文件。\n");
+  process.stderr.write(`缺少 Edge Functions 环境文件：${functionsEnvFile}\n`);
   process.exit(1);
 }
 

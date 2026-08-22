@@ -221,20 +221,6 @@ export function PostTestPage({
           </header>
 
           <div className="posttest-matrix">
-            <div className="posttest-scale-header" aria-hidden="true">
-              <span />
-              {posttestScale.map((option) => (
-                <span key={option.value}>
-                  <b>{option.value}</b>
-                  {(option.value === 1 || option.value === 5) && (
-                    <small>
-                      {option.zh}
-                      <i>{option.en}</i>
-                    </small>
-                  )}
-                </span>
-              ))}
-            </div>
             {section.items.map((item, index) => {
               const invalid = invalidIds.includes(item.id);
               return (

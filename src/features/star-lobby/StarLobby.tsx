@@ -1692,7 +1692,8 @@ export function StarLobby({
   const previousLanguage = useRef(language);
   const [translationPendingIds, setTranslationPendingIds] = useState<string[]>([]);
   const [translationFailedIds, setTranslationFailedIds] = useState<string[]>([]);
-  const [posttestToast, setPosttestToast] = useState("");
+  const [posttestToast, setPosttestToast] = useState<{ id: number; message: string } | null>(null);
+  const posttestToastId = useRef(0);
   const posttestReminderTracked = useRef(false);
   const initialBatchId = stories.find((story) => story.recommendationBatchId)?.recommendationBatchId ?? null;
   const [lobbyViewId, setLobbyViewId] = useState(() => createLobbyView(initialBatchId));
@@ -1952,11 +1953,14 @@ export function StarLobby({
   }, [showPosttestReminder, posttestStatus]);
   useEffect(() => {
     if (!posttestNotice) return;
-    setPosttestToast(posttestNotice);
+    setPosttestToast({ id: ++posttestToastId.current, message: posttestNotice });
     onPosttestNoticeConsumed?.();
-    const timer = window.setTimeout(() => setPosttestToast(""), 5200);
-    return () => window.clearTimeout(timer);
   }, [posttestNotice, onPosttestNoticeConsumed]);
+  useEffect(() => {
+    if (!posttestToast) return;
+    const timer = window.setTimeout(() => setPosttestToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [posttestToast]);
   useEffect(() => {
     updateAnalyticsContext({ lobbyViewId, recommendationBatchId: initialBatchId });
     if (!lobbyViewed.current) {
@@ -2267,16 +2271,18 @@ export function StarLobby({
               source: "star_lobby_button",
               status: "completed",
             });
-            setPosttestToast(
-              "你已经填写过后测问卷，感谢参与！ / You have already completed the post-study questionnaire. Thank you!",
-            );
+            setPosttestToast({
+              id: ++posttestToastId.current,
+              message:
+                "你已经填写过后测问卷，感谢参与！ / You have already completed the post-study questionnaire. Thank you!",
+            });
           }}
         />
       )}
       {posttestToast && (
         <div className="posttest-toast" role="status">
           <span aria-hidden="true">✓</span>
-          {posttestToast}
+          {posttestToast.message}
         </div>
       )}
       {/*

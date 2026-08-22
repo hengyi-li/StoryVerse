@@ -1,4 +1,5 @@
 import { isStoryTypeId, STORY_TYPE_IDS, type StoryTypeId } from "./story-types.ts";
+import { STORY_ANALYSIS_MAX_TOKENS, STORY_ANALYSIS_TIMEOUT_MS, STORY_IMAGE_TIMEOUT_MS } from "./ai-runtime.ts";
 import { ARK_EMBEDDING_PATH, createArkEmbeddingRequest, readArkEmbedding } from "./embedding.ts";
 import { ARK_IMAGE_GENERATION_PATH, createArkImageGenerationRequest, readSingleArkImage } from "./image-generation.ts";
 import {
@@ -192,7 +193,7 @@ JSON 结构：
 
 <story_data>${storyMaterial}</story_data>`;
 
-  const parsed = parseJson(await arkJsonCompletion(prompt));
+  const parsed = parseJson(await arkJsonCompletion(prompt, STORY_ANALYSIS_TIMEOUT_MS, STORY_ANALYSIS_MAX_TOKENS));
   const rawModeration = (parsed.moderation ?? {}) as Record<string, unknown>;
   const rawLabels = (parsed.labels ?? {}) as Record<string, unknown>;
   if (rawModeration.decision !== "pass" && rawModeration.decision !== "human_review") {
@@ -368,7 +369,7 @@ export async function createImageWithArk(input: { prompt: string; style: string;
     return arkFetch(
       ARK_IMAGE_GENERATION_PATH,
       createArkImageGenerationRequest(requiredModel("ARK_IMAGE_MODEL"), completePrompt),
-      120_000,
+      STORY_IMAGE_TIMEOUT_MS,
     );
   };
   let payload: Awaited<ReturnType<typeof requestImage>>;
