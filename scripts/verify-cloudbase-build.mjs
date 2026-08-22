@@ -26,6 +26,21 @@ const indexHtml = await readFile(new URL("index.html", distDirectory), "utf8");
 if (indexHtml.includes("/StoryVerse/")) fail("index.html still contains the GitHub Pages base path.");
 if (!/["']\/assets\//.test(indexHtml)) fail("index.html does not reference root-level hashed assets.");
 
+const expectedRouteNames = [
+  "StoryStart",
+  "StoryWrite",
+  "StoryAnalyzing",
+  "StoryPage",
+  "Resonance",
+  "Recommendations",
+  "StarLobby",
+  "Admin",
+];
+for (const routeName of expectedRouteNames) {
+  const routeIndex = await readFile(new URL(`${routeName}/index.html`, distDirectory), "utf8");
+  if (routeIndex !== indexHtml) fail(`${routeName}/index.html is not the current SPA entry.`);
+}
+
 const textExtensions = new Set([".css", ".html", ".js", ".json", ".map", ".svg", ".txt"]);
 const forbiddenPatterns = [
   { label: "Supabase secret key", pattern: /sb_secret_[A-Za-z0-9_-]+/ },

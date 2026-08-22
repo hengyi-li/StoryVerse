@@ -4,7 +4,7 @@ export function requiredFrontendOrigin() {
     .replace(/\/+$/, "");
   if (!value) {
     throw new Error(
-      "STORYVERSE_FRONTEND_ORIGIN is required. Set it to the exact deployed origin, for example https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com.",
+      "STORYVERSE_FRONTEND_ORIGIN is required. Set it to the exact deployed origin, for example https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com.",
     );
   }
   const url = new URL(value);

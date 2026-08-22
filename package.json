@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:local": "node scripts/dev-local.mjs",
     "build": "tsc --noEmit && vite build",
-    "build:cloudbase": "npm test && npm run build && node scripts/verify-cloudbase-build.mjs",
+    "build:cloudbase": "npm test && npm run build && node scripts/create-spa-route-fallbacks.mjs && node scripts/verify-cloudbase-build.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview",

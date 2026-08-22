@@ -72,7 +72,7 @@ ARK_TEXT_MODEL=doubao-seed-evolving
 ARK_EMBEDDING_MODEL=doubao-embedding-vision-251215
 ARK_IMAGE_MODEL=doubao-seedream-5-0-260128
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com
+FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com
 STORYVERSE_WORKER_TOKEN=使用密码管理器生成的至少64位随机字符串
 STORYVERSE_MONITOR_TOKEN=使用密码管理器生成的至少32位随机字符串
 ```
@@ -137,7 +137,7 @@ Node.js       22
 
 CloudBase 构建环境必须填写 `.env.example` 中的前端变量，并固定 `VITE_BASE_PATH=/`。取得腾讯云默认域名后，还要把完整 Origin 加入线上 `FRONTEND_ORIGINS` 和 Supabase Auth Redirect URL；只上传前端文件并不能完成后端授权。
 
-当前 CloudBase 生产候选环境为 `storyverse-prod-d9f1q8jqe812448d`，测试域名为 <https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com>。
+当前 CloudBase 生产候选环境为 `storyverse-prod-d9f1q8jqe812448d`，测试域名为 <https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com>。
 
 GitHub Pages 已退出发布链路。深层路由由 CloudBase 将错误文档/SPA 回退配置为 `index.html`，不再生成或依赖 `404.html`。完整控制台步骤、缓存策略、拨测与回滚见 [腾讯云部署手册](docs/deployment/tencent-cloud.md)。
 

@@ -13,11 +13,11 @@ GitHub main
 
 当前已创建的生产候选环境：
 
-| 配置        | 值                                                                      |
-| ----------- | ----------------------------------------------------------------------- |
-| 环境名称    | `storyverse-prod`                                                       |
-| 环境 ID     | `storyverse-prod-d9f1q8jqe812448d`                                      |
-| 默认 Origin | `https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com` |
+| 配置        | 值                                                                           |
+| ----------- | ---------------------------------------------------------------------------- |
+| 环境名称    | `storyverse-prod`                                                            |
+| 环境 ID     | `storyverse-prod-d9f1q8jqe812448d`                                           |
+| 应用 Origin | `https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com` |
 
 ## 2. 创建 CloudBase 部署
 
@@ -32,7 +32,7 @@ GitHub main
    | 安装命令 | `npm ci`                  |
    | 构建命令 | `npm run build:cloudbase` |
    | 输出目录 | `dist`                    |
-   | 部署路径 | `/`                       |
+   | 部署路径 | `/storyverse`             |
 
 5. 在 CloudBase 构建环境填写：
 
@@ -44,19 +44,19 @@ GitHub main
    VITE_ANALYTICS_CONDITION_ID=default
    ```
 
-6. 将首页文档和错误文档都设为 `index.html`，然后验证 `/StoryPage`、`/StarLobby` 和 `/Admin` 硬刷新返回 HTTP 200。
+6. 将首页文档设为 `index.html`。生产构建会为 `/StoryPage`、`/StarLobby`、`/Admin` 等所有深层路由自动生成同一 SPA 入口，确保硬刷新返回 HTTP 200。
 7. 浏览器缓存规则：`index.html` 不长期缓存；`/assets/*` 使用一年缓存。刷新配置后等待 CDN 生效再回归。
 
 ## 3. 接通 Supabase
 
-本环境的完整 Origin 是 `https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com`，配置时不要带路径或末尾 `/`。
+本应用的完整 Origin 是 `https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com`，配置时不要带路径或末尾 `/`。
 
 1. 生成独立拨测 Token：`openssl rand -hex 32`。
 2. 更新线上 Edge Function secrets，保留本地来源并加入腾讯域名：
 
    ```bash
    npx supabase secrets set \
-     FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com \
+     FRONTEND_ORIGINS=http://127.0.0.1:4173,http://localhost:4173,https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com \
      STORYVERSE_MONITOR_TOKEN=生成的随机值
    npx supabase functions deploy --project-ref zgyrbtdyraxglxhbkazp
    ```
@@ -65,7 +65,7 @@ GitHub main
 4. 所有线上 QA 命令必须显式提供真实来源：
 
    ```bash
-   STORYVERSE_FRONTEND_ORIGIN=https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com npm run qa:online-smoke
+   STORYVERSE_FRONTEND_ORIGIN=https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com npm run qa:online-smoke
    ```
 
 代码不再把任何 GitHub Pages 域名视为可信来源。陌生 Origin 的预检响应不会包含 `Access-Control-Allow-Origin`。
@@ -94,7 +94,7 @@ GitHub main
 单个网络环境的发布前检查：
 
 ```bash
-STORYVERSE_SITE_URL=https://storyverse-prod-d9f1q8jqe812448d-1351558504.tcloudbaseapp.com \
+STORYVERSE_SITE_URL=https://storyverse-storyverse-prod-d9f1q8jqe812448d.webapps.tcloudbase.com \
 VITE_SUPABASE_URL=https://zgyrbtdyraxglxhbkazp.supabase.co \
 VITE_SUPABASE_PUBLISHABLE_KEY=现有_publishable_key \
 STORYVERSE_MONITOR_TOKEN=拨测_token \

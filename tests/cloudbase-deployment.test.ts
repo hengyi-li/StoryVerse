@@ -11,8 +11,24 @@ describe("CloudBase deployment contract", () => {
 
   it("CloudBase 构建先测试，再构建并扫描产物", () => {
     expect(packageJson.scripts["build:cloudbase"]).toBe(
-      "npm test && npm run build && node scripts/verify-cloudbase-build.mjs",
+      "npm test && npm run build && node scripts/create-spa-route-fallbacks.mjs && node scripts/verify-cloudbase-build.mjs",
     );
+  });
+
+  it("CloudBase 构建为所有可直接访问页面生成 SPA 入口", () => {
+    const routeFallbackScript = readFileSync("scripts/create-spa-route-fallbacks.mjs", "utf8");
+    for (const route of [
+      "StoryStart",
+      "StoryWrite",
+      "StoryAnalyzing",
+      "StoryPage",
+      "Resonance",
+      "Recommendations",
+      "StarLobby",
+      "Admin",
+    ]) {
+      expect(routeFallbackScript).toContain(`"${route}"`);
+    }
   });
 
   it("仓库提供腾讯云配置、拨测和回滚说明", () => {
