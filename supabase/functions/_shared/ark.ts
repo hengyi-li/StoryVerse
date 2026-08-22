@@ -1,5 +1,6 @@
 import { isStoryTypeId, STORY_TYPE_IDS, type StoryTypeId } from "./story-types.ts";
 import { ARK_EMBEDDING_PATH, createArkEmbeddingRequest, readArkEmbedding } from "./embedding.ts";
+import { ARK_IMAGE_GENERATION_PATH, createArkImageGenerationRequest, readSingleArkImage } from "./image-generation.ts";
 import {
   detectTranslationSourceLanguage,
   translationDirectionInstruction,
@@ -361,18 +362,15 @@ const stylePrompt: Record<string, string> = {
 };
 
 export async function createImageWithArk(input: { prompt: string; style: string; fallbackPrompt?: string }) {
-  const requestImage = async (prompt: string) =>
-    (await arkFetch(
-      "/images/generations",
-      {
-        model: requiredModel("ARK_IMAGE_MODEL"),
-        prompt: `为一篇真实人生故事创作一张克制、尊重人物、无文字的正方形 1:1 插画。${stylePrompt[input.style] ?? stylePrompt["clay-3d"]}。${prompt}`,
-        size: "2048x2048",
-        response_format: "url",
-        watermark: false,
-      },
+  const startedAt = performance.now();
+  const requestImage = async (prompt: string) => {
+    const completePrompt = `为一篇真实人生故事创作一张克制、尊重人物、无文字的正方形 1:1 插画。${stylePrompt[input.style] ?? stylePrompt["clay-3d"]}。${prompt}`;
+    return arkFetch(
+      ARK_IMAGE_GENERATION_PATH,
+      createArkImageGenerationRequest(requiredModel("ARK_IMAGE_MODEL"), completePrompt),
       120_000,
-    )) as { data?: Array<{ url?: string; b64_json?: string }> };
+    );
+  };
   let payload: Awaited<ReturnType<typeof requestImage>>;
   let usedFallback = false;
   try {
@@ -383,10 +381,19 @@ export async function createImageWithArk(input: { prompt: string; style: string;
     payload = await requestImage(input.fallbackPrompt);
     usedFallback = true;
   }
-  const result = payload.data?.[0];
-  if (result?.url) return { kind: "url" as const, value: result.url, usedFallback };
-  if (result?.b64_json) return { kind: "base64" as const, value: result.b64_json, usedFallback };
-  throw new ArkError("Image model returned no image");
+  const result = readSingleArkImage(payload);
+  if (!result) throw new ArkError("Image model did not return exactly one image");
+  const durationMs = Math.round(performance.now() - startedAt);
+  console.info(
+    JSON.stringify({
+      event: "ark_image_generated",
+      model: requiredModel("ARK_IMAGE_MODEL"),
+      durationMs,
+      style: input.style,
+      usedFallback,
+    }),
+  );
+  return { ...result, usedFallback, durationMs };
 }
 
 export function arkModelInfo() {

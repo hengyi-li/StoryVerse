@@ -157,6 +157,7 @@ serve(async (request) => {
       imageStyle: input.style,
       highlight,
       imagePrompt: prompt,
+      generationDurationMs: generated.durationMs,
       story: storyPayload({ ...story, visual_status: "ready", image_url: imageUrl }),
     });
   } catch (error) {

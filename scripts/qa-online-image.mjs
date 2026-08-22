@@ -124,7 +124,18 @@ try {
   const { data: sessionData, error: sessionError } = await publicClient.auth.signInWithPassword({ email, password });
   if (sessionError || !sessionData.session) throw sessionError ?? new Error("Could not sign in online QA user.");
   const token = sessionData.session.access_token;
+  const generationStartedAt = performance.now();
   const first = await invoke("story-generate-image", { storyId: story.id, style: "indie-zine" }, token, publishableKey);
+  const totalGenerationDurationMs = Math.round(performance.now() - generationStartedAt);
+  if (
+    !Number.isFinite(first.generationDurationMs) ||
+    first.generationDurationMs <= 0 ||
+    totalGenerationDurationMs > 90_000
+  ) {
+    throw new Error(
+      `Online image generation exceeded the acceptance budget: provider=${first.generationDurationMs ?? "missing"}ms total=${totalGenerationDurationMs}ms.`,
+    );
+  }
   for (const expected of [
     "故事标题：二十九岁男生的社区花园傍晚",
     "地点：上海，China",
@@ -198,6 +209,8 @@ try {
         generatedImageRows: imageCount,
         modelAttemptsAfterThreeRequests: attemptCount,
         repeatedRequestsReused: true,
+        providerDurationMs: first.generationDurationMs,
+        totalGenerationDurationMs,
         browserCache: cacheControl,
         requiredPromptContext: "title-location-age-gender-stage-full-body",
         visualArtifact,
