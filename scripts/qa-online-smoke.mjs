@@ -7,6 +7,8 @@ import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const projectUrl = `https://${PROJECT_REF}.supabase.co`;
 const allowedOrigin = requiredFrontendOrigin();
+const textFunctionRegion = "ap-northeast-1";
+const tokyoTextFunctions = new Set(["story-analyze", "story-confirm", "story-translate"]);
 const userIds = [];
 const checks = [];
 
@@ -44,9 +46,14 @@ function apiKeys() {
 
 async function request(name, { body, token, method = "POST", origin = allowedOrigin } = {}) {
   const headers = { apikey: publishableKey, Origin: origin };
+  const endpoint = new URL(`${projectUrl}/functions/v1/${name}`);
+  if (tokyoTextFunctions.has(name)) {
+    endpoint.searchParams.set("forceFunctionRegion", textFunctionRegion);
+    headers["x-region"] = textFunctionRegion;
+  }
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`${projectUrl}/functions/v1/${name}`, {
+  const response = await fetch(endpoint, {
     method,
     headers,
     ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
@@ -239,10 +246,12 @@ try {
     "线上禁止举报自己的故事",
   );
 
+  const translationStartedAt = performance.now();
   const translated = await ok("story-translate", {
     token: userB.session.access_token,
     body: { storyIds: [featureFixture.id], targetLanguage: "en" },
   });
+  const translationDurationMs = Math.round(performance.now() - translationStartedAt);
   const englishStory = translated.translations?.[featureFixture.id];
   check(
     translated.targetLanguage === "en" &&
@@ -250,6 +259,7 @@ try {
       englishStory.body !== draft.body &&
       !/\p{Script=Han}/u.test(englishStory.body),
     "线上中文故事完整翻译为英文",
+    `${translationDurationMs}ms · ${textFunctionRegion}`,
   );
 
   const translatedAgain = await ok("story-translate", {
@@ -261,7 +271,9 @@ try {
     "线上重复翻译命中缓存",
   );
 
+  const analysisStartedAt = performance.now();
   const analyzed = await ok("story-analyze", { token: userA.session.access_token, body: { draft } });
+  const analysisDurationMs = Math.round(performance.now() - analysisStartedAt);
   if (analyzed.status !== "needs_confirmation") {
     const [{ data: storyState }, { data: moderation }, { data: taskState }] = await Promise.all([
       service
@@ -288,11 +300,12 @@ try {
       `线上真实 AI 审核、标签与向量: ${JSON.stringify({ responseStatus: analyzed.status, storyState, moderation, taskState })}`,
     );
   }
-  check(true, "线上真实 AI 审核、标签与向量", analyzed.status);
+  check(true, "线上真实 AI 审核、标签与向量", `${analyzed.status} · ${analysisDurationMs}ms · ${textFunctionRegion}`);
   check(
     analyzed.analysis?.storyTags?.themes?.length === 2 && Boolean(analyzed.analysis?.storyTags?.eventType?.value),
     "线上 AI 返回单一类型与两个主题",
   );
+  const confirmationStartedAt = performance.now();
   const confirmed = await ok("story-confirm", {
     token: userA.session.access_token,
     body: {
@@ -303,7 +316,8 @@ try {
       emotions: analyzed.analysis.storyTags.emotions ?? [],
     },
   });
-  check(confirmed.status === "published", "线上故事确认并公开");
+  const confirmationDurationMs = Math.round(performance.now() - confirmationStartedAt);
+  check(confirmed.status === "published", "线上故事确认并公开", `${confirmationDurationMs}ms · ${textFunctionRegion}`);
 
   const { data: publicStory, error: publicStoryError } = await clientB
     .from("stories")
