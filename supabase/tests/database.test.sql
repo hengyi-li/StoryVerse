@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(88);
+select plan(90);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'stories', 'stories table exists');
@@ -53,6 +53,11 @@ select is(
   (select count(*)::integer from pg_constraint where conname = 'story_drafts_gender_allowed'),
   1,
   'draft gender values allow empty drafts but reject forged values'
+);
+select is(
+  (select count(*)::integer from pg_constraint where conname = 'stories_coordinates_required'),
+  1,
+  'stories require a latitude and longitude pair at the database layer'
 );
 
 select is((select count(*)::integer from public.story_types), 21, 'exactly 21 story types are seeded');
@@ -212,6 +217,21 @@ insert into public.stories (
   '私密用户', '不公开故事', repeat('字', 100), '平和自足', '成年早期', 30, '女', '原点城',
   0, 0, array['自己'], 'private', 'pass', 'career_achievement', array['职业成长', '自我肯定'],
   'private-hash', null
+);
+
+select throws_ok(
+  $$insert into public.stories (
+      id, user_id, author_display_name, title, body, mood, life_stage, age, gender, city,
+      people, status, content_hash
+    ) values (
+      '30000000-0000-0000-0000-000000000000',
+      '00000000-0000-0000-0000-000000000998',
+      '候选用户', '缺少坐标的故事', repeat('字', 100), '平和自足', '成年早期', 30, '女', '未知城市',
+      array['自己'], 'analyzing', 'missing-coordinate-hash'
+    )$$,
+  '23514',
+  null,
+  'a story without coordinates is rejected by the database'
 );
 
 insert into public.story_translations (

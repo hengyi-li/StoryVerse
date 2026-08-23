@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyStoryTranslation, mergeLobbyStories, type StoryRecommendation } from "../src/services/data-service";
 import { geographicCityScore } from "../src/lib/geo-distance";
 import type { Story } from "../src/types/domain";
+import { storyPayload } from "../supabase/functions/_shared/story-data.ts";
 
 function story(
   id: string,
@@ -73,6 +74,26 @@ describe("StarLobby 故事合并", () => {
       geographicCityScore(story("latest", "published"), recommendation),
       10,
     );
+  });
+
+  it("推荐接口保留经纬度，使大厅不会把真实城市距离统一兜底为 50%", () => {
+    const center = story("mine", "published");
+    const payload = storyPayload({
+      id: "api-story",
+      title: "北京故事",
+      body: "这是一个用于验证推荐接口经纬度载荷的故事。",
+      city: "北京",
+      latitude: "39.9042",
+      longitude: "116.4074",
+      status: "published",
+      final_themes: ["城市记忆", "人生选择"],
+    });
+
+    expect(payload).toMatchObject({ latitude: 39.9042, longitude: 116.4074 });
+    const result = mergeLobbyStories([{ story: payload as Story, reason: "推荐" }], [center]);
+    const expected = geographicCityScore(center, payload as Story);
+    expect(result[1].story.cityScore).toBeCloseTo(expected, 10);
+    expect(result[1].story.cityScore).not.toBe(0.5);
   });
 
   it("不会把城市相异偏好产生的翻转分数用于星空位置", () => {

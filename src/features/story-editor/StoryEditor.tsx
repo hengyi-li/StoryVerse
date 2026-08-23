@@ -11,7 +11,7 @@ import { createActiveTimer, pageCanAccumulateTime } from "../../lib/analytics-ti
 import { dataService } from "../../services/data-service";
 import { createStoryImagePreview, downloadStoryImage } from "../../services/story-image";
 import type { ImageStyle, StoryHighlight } from "../../services/story-image";
-import { formatCoords } from "../../services/place-search";
+import { formatCoords, resolvePlaceCoordinates } from "../../services/place-search";
 import { startSpeechRecognition } from "../../services/speech-input";
 import type { SpeechRecognitionHandle } from "../../services/speech-input";
 import { Tour } from "../tour/Tour";
@@ -89,6 +89,7 @@ export function StoryEditor({
   const [leaveTarget, setLeaveTarget] = useState<StoryEditorStep | null>(null);
   const [editingBody, setEditingBody] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [locationResolving, setLocationResolving] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
   const [storyTags, setStoryTags] = useState<StoryTagSet | null>(null);
@@ -129,6 +130,8 @@ export function StoryEditor({
   const confirmationBodyAtOpen = useRef("");
   const analysisRequestedByUser = useRef(false);
   const trackedReadyImage = useRef("");
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
 
   const pauseWritingTimers = () => {
     titleTimer.current.pause();
@@ -573,6 +576,7 @@ export function StoryEditor({
     mood: text.mood,
     stage: text.lifeStage,
     city: text.city,
+    coordinates: language === "zh" ? "可定位的城市（请从搜索结果中选择）" : "a located city (choose a search result)",
     age: text.ageLabel,
     gender: text.gender,
     people: text.people,
@@ -809,28 +813,60 @@ ${text}`
     pauseWritingTimers();
     activeField.current = null;
   };
-  const startAnalysis = () => {
+  const startAnalysis = async () => {
+    if (locationResolving) return;
+    const missingFields = getMissingRequiredStoryFields(draft);
+    const missingBeforeLocation = missingFields.filter((field) => field !== "coordinates");
     track("ai_organize_clicked", {
       draft_id: draft.id ?? null,
       body_length: storyBodyLength,
-      valid: canContinueCollection,
+      valid: missingBeforeLocation.length === 0,
+      coordinates_resolved: !missingFields.includes("coordinates"),
     });
-    if (!canContinueCollection) {
+    if (missingBeforeLocation.length > 0) {
       setSubmitAttempted(true);
-      track("story_validation_blocked", { step: "collection", missing_fields: getMissingRequiredStoryFields(draft) });
+      track("story_validation_blocked", { step: "collection", missing_fields: missingBeforeLocation });
       return;
     }
+
+    let draftForAnalysis = draft;
+    if (missingFields.includes("coordinates")) {
+      const requestedCity = draft.city.trim();
+      setSubmitAttempted(false);
+      setLocationResolving(true);
+      const point = await resolvePlaceCoordinates(requestedCity, draft.cityLat, draft.cityLon);
+      setLocationResolving(false);
+      const currentDraft = latestDraft.current;
+      if (!point || currentDraft.city.trim() !== requestedCity) {
+        setSubmitAttempted(true);
+        track("story_validation_blocked", { step: "collection", missing_fields: ["coordinates"] });
+        return;
+      }
+      draftForAnalysis = { ...currentDraft, cityLat: point.lat, cityLon: point.lon };
+      const missingAfterResolution = getMissingRequiredStoryFields(draftForAnalysis);
+      if (missingAfterResolution.length > 0) {
+        setSubmitAttempted(true);
+        track("story_validation_blocked", { step: "collection", missing_fields: missingAfterResolution });
+        return;
+      }
+    }
+
     pauseWritingTimers();
-    const snapshotKey = [draft.id, draft.title, draft.body, draft.savedAt].join("\u0000");
+    const snapshotKey = [
+      draftForAnalysis.id,
+      draftForAnalysis.title,
+      draftForAnalysis.body,
+      draftForAnalysis.savedAt,
+    ].join("\u0000");
     if (lastSnapshotKey.current !== snapshotKey) {
       lastSnapshotKey.current = snapshotKey;
       track(
         "story_input_snapshot",
         {
-          draft_id: draft.id ?? null,
+          draft_id: draftForAnalysis.id ?? null,
           story_id: state.analysis?.id ?? null,
-          title: draft.title,
-          body: draft.body,
+          title: draftForAnalysis.title,
+          body: draftForAnalysis.body,
           title_active_ms: Math.round(titleTimer.current.read()),
           body_active_ms: Math.round(bodyTimer.current.read()),
           wall_duration_ms: Math.round(performance.now() - (writeStartedAt.current ?? performance.now())),
@@ -842,23 +878,25 @@ ${text}`
           pasted_texts: pastedTexts.current,
           used_voice_input: usedVoiceInput.current,
           used_focus_mode: usedFocusMode.current,
-          title_length: draft.title.length,
-          body_length: storyBodyLength,
-          guide: draft.guide,
-          custom_guide: draft.customGuide,
-          mood: draft.mood,
-          life_stage: draft.stage,
-          age: Number(draft.age),
-          gender: draft.gender,
-          city: draft.city,
-          people: draft.people,
+          title_length: draftForAnalysis.title.length,
+          body_length: storyBodyLengthUnits(draftForAnalysis.body),
+          guide: draftForAnalysis.guide,
+          custom_guide: draftForAnalysis.customGuide,
+          mood: draftForAnalysis.mood,
+          life_stage: draftForAnalysis.stage,
+          age: Number(draftForAnalysis.age),
+          gender: draftForAnalysis.gender,
+          city: draftForAnalysis.city,
+          city_latitude: draftForAnalysis.cityLat,
+          city_longitude: draftForAnalysis.cityLon,
+          people: draftForAnalysis.people,
         },
         { immediate: true },
       );
     }
     setFocusMode(false);
     analysisRequestedByUser.current = true;
-    update({ storyEditorStep: 2 });
+    update({ draft: draftForAnalysis, storyEditorStep: 2 });
   };
 
   return (
@@ -1178,7 +1216,9 @@ ${text}`
                       ? "接下来将进入AI主题分析界面，请确认你的基本故事情节、人物、时间、地点准确哦"
                       : "Next, you’ll enter AI theme analysis. Please check that the story’s basic plot, people, time, and place are accurate."}
                 </span>
-                <PrimaryButton onClick={startAnalysis}>{text.ai}</PrimaryButton>
+                <PrimaryButton disabled={locationResolving} onClick={() => void startAnalysis()}>
+                  {locationResolving ? text.coordsResolving : text.ai}
+                </PrimaryButton>
               </div>
             )}
           </div>

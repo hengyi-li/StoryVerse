@@ -34,6 +34,10 @@ const messageByCode: Record<string, LocalizedMessage> = {
 
   AGE_REQUIRED: { zh: "请填写 1–120 之间的有效年龄。", en: "Enter a valid age from 1 to 120." },
   CITY_REQUIRED: { zh: "请填写城市。", en: "Enter a city." },
+  CITY_COORDINATES_REQUIRED: {
+    zh: "请从搜索结果中选择城市，确认地点坐标。",
+    en: "Choose a city from the search results to confirm its coordinates.",
+  },
   GENDER_REQUIRED: { zh: "请选择性别。", en: "Choose a gender option." },
   LIFE_STAGE_REQUIRED: { zh: "请选择当时所处的人生阶段。", en: "Choose the life stage at the time." },
   MOOD_REQUIRED: { zh: "请选择回想这段故事时的主要感受。", en: "Choose the main feeling this story brings up." },

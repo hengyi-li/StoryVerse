@@ -3,7 +3,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Check, MapPin } from "lucide-react";
 import { uiCopy as copy } from "../../data/interface-content";
 import { guides } from "../../data/story-content";
-import { formatCoords, geocodePlace, searchPlaces } from "../../services/place-search";
+import { formatCoords, geocodePlace, hasValidCoordinates, searchPlaces } from "../../services/place-search";
 import { track } from "../../lib/analytics";
 import type { PlaceSuggestion } from "../../services/place-search";
 import type { StoryDraft, Language } from "../../types/domain";
@@ -227,10 +227,12 @@ export function CityField({
   };
   const commitText = (text: string) => {
     const value = text.trim();
-    if (value === draft.city) return;
-    updateDraft({ city: value, cityNameEn: "", cityCountry: "", cityLat: null, cityLon: null });
     committed.current = value;
+    if (value !== draft.city) {
+      updateDraft({ city: value, cityNameEn: "", cityCountry: "", cityLat: null, cityLon: null });
+    }
     if (!value) return;
+    if (value === draft.city && hasValidCoordinates(draft.cityLat, draft.cityLon)) return;
     geocodePlace(value).then((point) => {
       if (point && committed.current === value) updateDraft({ cityLat: point.lat, cityLon: point.lon });
     });
@@ -262,8 +264,13 @@ export function CityField({
           aria-expanded={open}
           autoComplete="off"
           onChange={(event) => {
-            setQuery(event.target.value);
+            const value = event.target.value;
+            setQuery(value);
             setOpen(true);
+            if (value !== draft.city) {
+              committed.current = value.trim();
+              updateDraft({ city: value, cityNameEn: "", cityCountry: "", cityLat: null, cityLon: null });
+            }
           }}
           onFocus={() => {
             setOpen(true);
@@ -297,7 +304,7 @@ export function CityField({
       <span className="city-coords">
         {!draft.city ? (
           ""
-        ) : draft.cityLat !== null ? (
+        ) : hasValidCoordinates(draft.cityLat, draft.cityLon) ? (
           <>
             {text.coordsResolved} {formatCoords(draft.cityLat, draft.cityLon)} · {text.coordsUse}
           </>

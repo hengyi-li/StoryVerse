@@ -103,6 +103,8 @@ export function storyPayload(row: Record<string, unknown>) {
     author: String(row.author_display_name || "StoryVerse"),
     city: String(row.city ?? ""),
     cityNameEn: String(row.city_name_en ?? ""),
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
     stage: String(row.life_stage ?? ""),
     age: Number(row.age ?? 0),
     gender: String(row.gender ?? ""),

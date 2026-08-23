@@ -17,7 +17,22 @@ export interface GeoPoint {
   lon: number;
 }
 
+export const PLACE_RESOLUTION_TIMEOUT_MS = 7_000;
+
 const cache = new Map<string, PlaceSuggestion[]>();
+
+export function hasValidCoordinates(lat: number | null | undefined, lon: number | null | undefined) {
+  return (
+    lat != null &&
+    lon != null &&
+    Number.isFinite(Number(lat)) &&
+    Number.isFinite(Number(lon)) &&
+    Number(lat) >= -90 &&
+    Number(lat) <= 90 &&
+    Number(lon) >= -180 &&
+    Number(lon) <= 180
+  );
+}
 
 async function searchRemote(query: string): Promise<PlaceSuggestion[]> {
   if (!isSupabaseConfigured) return [];
@@ -105,6 +120,35 @@ export async function geocodePlace(name: string): Promise<GeoPoint | null> {
   return match && match.lat !== null && match.lon !== null ? { lat: match.lat, lon: match.lon } : null;
 }
 
+/**
+ * 正式提交前的坐标闸门：已有合法坐标直接复用，否则等待城市解析。
+ * 超时或解析失败一律返回 null，由界面阻止进入 AI 分析。
+ */
+export async function resolvePlaceCoordinates(
+  name: string,
+  lat: number | null | undefined,
+  lon: number | null | undefined,
+  options: {
+    timeoutMs?: number;
+    resolver?: (placeName: string) => Promise<GeoPoint | null>;
+  } = {},
+): Promise<GeoPoint | null> {
+  if (hasValidCoordinates(lat, lon)) return { lat: Number(lat), lon: Number(lon) };
+  const timeoutMs = options.timeoutMs ?? PLACE_RESOLUTION_TIMEOUT_MS;
+  const resolver = options.resolver ?? geocodePlace;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      resolver(name).catch(() => null),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
 export async function getIpPlaceHint(): Promise<PlaceSuggestion | null> {
   if (!isSupabaseConfigured) return null;
   try {
@@ -117,8 +161,8 @@ export async function getIpPlaceHint(): Promise<PlaceSuggestion | null> {
 }
 
 export function formatCoords(lat: number | null, lon: number | null) {
-  if (lat === null || lon === null) return "";
-  return `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+  if (!hasValidCoordinates(lat, lon)) return "";
+  return `${Number(lat).toFixed(2)}, ${Number(lon).toFixed(2)}`;
 }
 
 function toSuggestion(city: (typeof cities)[number]): PlaceSuggestion {

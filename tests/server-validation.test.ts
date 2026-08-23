@@ -25,6 +25,8 @@ const completeDraft = {
   age: "26",
   gender: "女",
   city: "北京",
+  cityLat: 39.9042,
+  cityLon: 116.4074,
   people: ["自己"],
 };
 
@@ -119,6 +121,17 @@ describe("服务端故事校验", () => {
     expect(() => validateDraft({ ...completeDraft, cityLat: 90.0001 })).toThrow();
     expect(() => validateDraft({ ...completeDraft, cityLon: -180.0001 })).toThrow();
     expect(() => validateDraft({ ...completeDraft, cityLat: "not-a-number" as unknown as number })).toThrow();
+  });
+
+  it("正式分析必须同时具有经纬度，草稿仍可暂存空坐标", () => {
+    expect(() => validateDraft({ ...completeDraft, cityLat: null, cityLon: null })).toThrow("请从搜索结果中选择城市");
+    expect(() => validateDraft({ ...completeDraft, cityLat: 39.9042, cityLon: null }, true)).toThrow(
+      "城市坐标超出有效范围",
+    );
+    expect(validateDraft({ ...completeDraft, cityLat: null, cityLon: null }, true)).toMatchObject({
+      cityLat: null,
+      cityLon: null,
+    });
   });
 
   it("标题允许为空", () => {

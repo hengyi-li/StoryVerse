@@ -2,6 +2,7 @@ import clayStylePreview from "../../assets/image-styles/clay-3d.webp";
 import indieZineStylePreview from "../../assets/image-styles/indie-zine.webp";
 import retroCollageStylePreview from "../../assets/image-styles/retro-collage.webp";
 import type { ImageStyle } from "../../services/story-image";
+import { hasValidCoordinates } from "../../services/place-search";
 import { storyBodyLengthUnits } from "../../lib/story-length";
 import type {
   AppState,
@@ -97,7 +98,7 @@ export function isStoryBodyLengthValid(body: string) {
 
 export { storyBodyLengthUnits };
 
-export type RequiredStoryField = "body" | "mood" | "stage" | "city" | "age" | "gender" | "people";
+export type RequiredStoryField = "body" | "mood" | "stage" | "city" | "coordinates" | "age" | "gender" | "people";
 
 export function getMissingRequiredStoryFields(draft: StoryDraft): RequiredStoryField[] {
   const missing: RequiredStoryField[] = [];
@@ -105,6 +106,7 @@ export function getMissingRequiredStoryFields(draft: StoryDraft): RequiredStoryF
   if (!draft.mood) missing.push("mood");
   if (!draft.stage) missing.push("stage");
   if (!draft.city) missing.push("city");
+  else if (!hasValidCoordinates(draft.cityLat, draft.cityLon)) missing.push("coordinates");
   if (!draft.age) missing.push("age");
   if (!draft.gender) missing.push("gender");
   if (draft.people.length === 0) missing.push("people");

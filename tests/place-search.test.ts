@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractAge, extractCity } from "../src/lib/story-hints";
-import { geocodePlace, searchPlaces } from "../src/services/place-search";
+import { geocodePlace, hasValidCoordinates, resolvePlaceCoordinates, searchPlaces } from "../src/services/place-search";
+
+afterEach(() => vi.useRealTimers());
 
 describe("本地识别与地点搜索", () => {
   it("识别中英文年龄和正文中的城市", () => {
@@ -26,5 +28,38 @@ describe("本地识别与地点搜索", () => {
     expect(english[0]?.name).toBe("德黑兰");
     expect(alternateSpelling[0]?.name).toBe("德黑兰");
     expect(await geocodePlace("德黑兰")).toMatchObject({ lat: 35.6892, lon: 51.389 });
+  });
+
+  it("提交前复用合法坐标，缺失时等待解析结果", async () => {
+    const resolver = vi.fn().mockResolvedValue({ lat: 64.13548, lon: -21.89541 });
+    expect(hasValidCoordinates(39.9042, 116.4074)).toBe(true);
+    expect(hasValidCoordinates(null, 116.4074)).toBe(false);
+    expect(await resolvePlaceCoordinates("北京", 39.9042, 116.4074, { resolver })).toEqual({
+      lat: 39.9042,
+      lon: 116.4074,
+    });
+    expect(resolver).not.toHaveBeenCalled();
+
+    expect(await resolvePlaceCoordinates("Reykjavik", null, null, { resolver })).toEqual({
+      lat: 64.13548,
+      lon: -21.89541,
+    });
+    expect(resolver).toHaveBeenCalledWith("Reykjavik");
+  });
+
+  it("地点解析失败或超时不会伪造坐标", async () => {
+    expect(
+      await resolvePlaceCoordinates("不存在的地点", null, null, {
+        resolver: vi.fn().mockResolvedValue(null),
+      }),
+    ).toBeNull();
+
+    vi.useFakeTimers();
+    const pending = resolvePlaceCoordinates("网络超时地点", null, null, {
+      timeoutMs: 50,
+      resolver: () => new Promise(() => undefined),
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(pending).resolves.toBeNull();
   });
 });

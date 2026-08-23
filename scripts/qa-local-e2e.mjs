@@ -370,8 +370,12 @@ try {
     throw candidateResultError ?? new Error("Eligible candidate story was missing from the Top 100 batch.");
   }
   const lobby = await callFunction("lobby-stories", {}, tokenA);
-  if (!lobby.payload.recommendations.some((item) => item.story?.id === candidate.id)) {
+  const lobbyCandidate = lobby.payload.recommendations.find((item) => item.story?.id === candidate.id);
+  if (!lobbyCandidate) {
     throw new Error("Lobby did not return the recommendation batch.");
+  }
+  if (Number(lobbyCandidate.story.latitude) !== 30.2741 || Number(lobbyCandidate.story.longitude) !== 120.1551) {
+    throw new Error("Lobby recommendation payload lost the story coordinates.");
   }
   ok("推荐公式、批次与 StarLobby Top 结果");
 
@@ -416,11 +420,22 @@ try {
   }
   ok("用户反馈进入管理员后台");
 
-  const places = await callFunction("places-search", { query: "上海" }, tokenA);
-  if (!Array.isArray(places.payload.places)) throw new Error("Place search returned an invalid shape.");
+  const places = await callFunction("places-search", { query: "Reykjavik", language: "en" }, tokenA);
+  if (
+    !Array.isArray(places.payload.places) ||
+    !places.payload.places.some(
+      (place) =>
+        place.lat != null &&
+        place.lon != null &&
+        Number.isFinite(Number(place.lat)) &&
+        Number.isFinite(Number(place.lon)),
+    )
+  ) {
+    throw new Error("Remote place search did not return real coordinates.");
+  }
   const ipHint = await callFunction("places-ip-hint", {}, tokenA);
   if (!("place" in ipHint.payload)) throw new Error("IP hint returned an invalid shape.");
-  ok("服务端城市搜索与 IP 提示降级");
+  ok("服务端全球城市搜索返回真实坐标，IP 提示可安全降级");
 
   const seedRow = {
     external_id: qaSeedExternalId,

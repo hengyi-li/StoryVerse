@@ -345,6 +345,22 @@ try {
   if (publicStoryError) throw publicStoryError;
   check(publicStory?.status === "published", "线上公开故事可被其他用户读取");
 
+  const remotePlaces = await ok("places-search", {
+    token: userA.session.access_token,
+    body: { query: "Reykjavik", language: "en" },
+  });
+  check(
+    Array.isArray(remotePlaces.places) &&
+      remotePlaces.places.some(
+        (place) =>
+          place.lat != null &&
+          place.lon != null &&
+          Number.isFinite(Number(place.lat)) &&
+          Number.isFinite(Number(place.lon)),
+      ),
+    "线上全球城市搜索返回真实经纬度",
+  );
+
   const recommendations = await ok("recommendations-refresh", {
     token: userA.session.access_token,
     body: {},
@@ -352,6 +368,16 @@ try {
   check(Array.isArray(recommendations.recommendations), "线上推荐批次结构稳定");
   const lobby = await ok("lobby-stories", { token: userA.session.access_token, method: "GET" });
   check(Array.isArray(lobby.recommendations) && lobby.recommendations.length > 0, "线上星空大厅返回真实故事");
+  check(
+    lobby.recommendations.every(
+      (item) =>
+        item.story?.latitude != null &&
+        item.story?.longitude != null &&
+        Number.isFinite(Number(item.story.latitude)) &&
+        Number.isFinite(Number(item.story.longitude)),
+    ),
+    "线上星空大厅故事保留真实经纬度",
+  );
   const notices = await ok("notifications", { token: userA.session.access_token, method: "GET" });
   check(Array.isArray(notices.notifications), "线上通知接口结构稳定");
 

@@ -99,6 +99,7 @@ export function validateDraft(
   const latitude = hasLatitude ? Number(rawLatitude) : null;
   const longitude = hasLongitude ? Number(rawLongitude) : null;
   if (
+    hasLatitude !== hasLongitude ||
     (hasLatitude && (!Number.isFinite(latitude) || Number(latitude) < -90 || Number(latitude) > 90)) ||
     (hasLongitude && (!Number.isFinite(longitude) || Number(longitude) < -180 || Number(longitude) > 180))
   ) {
@@ -121,6 +122,9 @@ export function validateDraft(
       throw new ApiError(400, "GENDER_REQUIRED", "请选择有效的性别选项。");
     }
     if (!String(value.city ?? "").trim()) throw new ApiError(400, "CITY_REQUIRED", "请填写城市。");
+    if (!hasLatitude || !hasLongitude) {
+      throw new ApiError(400, "CITY_COORDINATES_REQUIRED", "请从搜索结果中选择城市，确认地点坐标。");
+    }
     if (!people.length) throw new ApiError(400, "PEOPLE_REQUIRED", "请选择故事中的人物。");
   }
   return {

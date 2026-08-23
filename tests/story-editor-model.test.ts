@@ -24,6 +24,8 @@ describe("故事编辑字段规则", () => {
       mood: "平和自足",
       stage: "成年早期",
       city: "北京",
+      cityLat: 39.9042,
+      cityLon: 116.4074,
       age: "26",
       gender: "女",
       people: ["自己"],
@@ -33,6 +35,7 @@ describe("故事编辑字段规则", () => {
     expect(getMissingRequiredStoryFields({ ...completeDraft, age: "" })).toContain("age");
     expect(getMissingRequiredStoryFields({ ...completeDraft, gender: "" })).toContain("gender");
     expect(getMissingRequiredStoryFields({ ...completeDraft, stage: "" })).toContain("stage");
+    expect(getMissingRequiredStoryFields({ ...completeDraft, cityLat: null, cityLon: null })).toContain("coordinates");
   });
 
   it("正文必须在 100 到 1500 字之间", () => {
