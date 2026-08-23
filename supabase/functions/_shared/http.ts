@@ -27,7 +27,7 @@ export function corsHeaders(request: Request) {
   const origin = request.headers.get("origin");
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers":
-      "authorization, apikey, content-type, x-client-info, x-storyverse-monitor-token, x-storyverse-worker-token",
+      "authorization, apikey, content-type, x-client-info, x-region, x-storyverse-monitor-token, x-storyverse-worker-token",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin",
   };

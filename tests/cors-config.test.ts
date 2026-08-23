@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { corsHeaders, isAllowedOrigin } from "../supabase/functions/_shared/http.ts";
+import { corsHeaders, handleOptions, isAllowedOrigin } from "../supabase/functions/_shared/http.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -36,5 +36,23 @@ describe("Edge Function CORS", () => {
     );
     expect(allowed["Access-Control-Allow-Origin"]).toBe("https://demo.tcloudbaseapp.com");
     expect(blocked["Access-Control-Allow-Origin"]).toBeUndefined();
+  });
+
+  it("预检请求允许 Supabase 区域路由使用 x-region 请求头", () => {
+    configureOrigins("https://demo.tcloudbaseapp.com");
+    const response = handleOptions(
+      new Request("https://api.example", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://demo.tcloudbaseapp.com",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "authorization, apikey, content-type, x-client-info, x-region",
+        },
+      }),
+    );
+
+    expect(response?.status).toBe(204);
+    expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("https://demo.tcloudbaseapp.com");
+    expect(response?.headers.get("Access-Control-Allow-Headers")?.split(/,\s*/)).toContain("x-region");
   });
 });
