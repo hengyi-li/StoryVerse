@@ -14,6 +14,12 @@ export type StoryImageSource = {
 
 export const STORY_IMAGE_PROMPT_MARKER = "STORYVERSE_IMAGE_PROMPT_V2";
 
+const PERSON_APPEARANCE_RULES = [
+  "地点只用于理解故事发生的空间环境，绝不能据此推断人物的国籍、民族、宗教信仰、文化身份或生活方式。",
+  "人物穿着不得因城市、国家或地区而做特殊处理，统一使用符合人物年龄、时代与具体日常场景的中性普通服装。",
+  "绝对禁止出现或强化任何特定民族服饰、宗教或信仰服饰、传统头饰、仪式性穿着，以及用服装或配饰表达国籍、族群或信仰的符号；即使地点或正文可能让人联想到这些元素，也不要呈现。",
+].join("\n");
+
 function text(value: unknown, fallback = "未提供") {
   const normalized = String(value ?? "").trim();
   return normalized || fallback;
@@ -47,6 +53,7 @@ export function buildStoryImagePrompt(story: StoryImageSource) {
     "故事正文：",
     text(story.body),
     "构图要求：画面主角默认是叙事者，外貌年龄和性别必须与上述信息一致；除非正文明确说明画面主角是其他人物，不要擅自改变叙事者的性别或年龄段。",
+    PERSON_APPEARANCE_RULES,
   ].join("\n");
 }
 
@@ -86,5 +93,6 @@ export function buildStoryImageFallbackPrompt(story: StoryImageSource) {
     `故事主题：${themes.length ? themes.join("、") : "未提供"}`,
     `代表性瞬间：${representativeMoment}`,
     "画面主角默认是叙事者，外貌年龄和性别必须与资料一致。不要添加文字、旗帜、徽标、政治人物或组织标志。",
+    PERSON_APPEARANCE_RULES,
   ].join("\n");
 }

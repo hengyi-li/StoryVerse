@@ -29,6 +29,9 @@ describe("故事图片 Prompt", () => {
     expect(prompt).toContain("故事中的人物：自己、朋友");
     expect(prompt).toContain("故事正文：");
     expect(prompt).toContain("不要擅自改变叙事者的性别或年龄段");
+    expect(prompt).toContain("绝不能据此推断人物的国籍、民族、宗教信仰、文化身份或生活方式");
+    expect(prompt).toContain("人物穿着不得因城市、国家或地区而做特殊处理");
+    expect(prompt).toContain("绝对禁止出现或强化任何特定民族服饰、宗教或信仰服饰");
   });
 
   it("标题为空时使用 AI 建议标题", () => {
@@ -56,6 +59,8 @@ describe("故事图片 Prompt", () => {
     expect(prompt).toContain("叙事者性别：男");
     expect(prompt).toContain("叙事者当时所处的人生阶段：成年早期");
     expect(prompt).toContain("代表性瞬间：我小时候生活很困难");
+    expect(prompt).toContain("人物穿着不得因城市、国家或地区而做特殊处理");
+    expect(prompt).toContain("绝对禁止出现或强化任何特定民族服饰、宗教或信仰服饰");
     expect(prompt).not.toContain(body);
   });
 });

@@ -84,7 +84,7 @@ test.describe("故事写作与恢复", () => {
     await expect(page.getByRole("combobox", { name: /城市/ })).toHaveValue("上海");
   });
 
-  test("@real-ai 从写作、AI 整理、图片、确认发布、共鸣选择进入 StarLobby", async ({ page, context }) => {
+  test("@real-ai 从写作、AI 整理、图片、确认发布、共鸣选择进入 StarLobby", async ({ page }) => {
     test.setTimeout(240_000);
     const account = await createAccount({ pretestRequired: false, displayName: "AI E2E 用户" });
     accounts.push(account);
@@ -110,7 +110,7 @@ test.describe("故事写作与恢复", () => {
     )
       await page.keyboard.press("Escape");
 
-    await expect(page.getByText(/图片由AI生成，请理性辨别真实性/)).toBeVisible();
+    await expect(page.getByText(/本图片为 AIGC 生成内容，不代表 StoryVerse 团队立场/)).toBeVisible();
     await page.getByRole("button", { name: /生成故事图片/ }).click();
     const generatedImage = page.locator(".single-story-image img");
     await expect(generatedImage).toBeVisible({ timeout: 150_000 });
@@ -121,12 +121,10 @@ test.describe("故事写作与恢复", () => {
       true,
     );
 
-    const popupPromise = context.waitForEvent("page");
-    await page.getByRole("button", { name: /在新页面打开图片/ }).click();
-    const imagePage = await popupPromise;
-    await imagePage.waitForLoadState("domcontentloaded");
-    await expect(imagePage).toHaveURL(/\/storage\/v1\/object\/public\/story-images\//);
-    await imagePage.close();
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: /下载图片/ }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.(?:png|jpe?g|webp)$/i);
 
     await page.getByRole("button", { name: /点亮我的故事星点/ }).click();
     await expect(page).toHaveURL(/\/Resonance$/);
