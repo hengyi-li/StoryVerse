@@ -50,6 +50,9 @@ describe("手机端响应式设计契约", () => {
     expect(starLobbyCss).toMatch(
       /@media \(max-height: 520px\) and \(orientation: landscape\)[\s\S]*?\.story-panel \{[\s\S]*?transform: none/,
     );
+    expect(starLobbyCss).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.story-score-popover \{[\s\S]*?position: static;[\s\S]*?width: 100%/,
+    );
   });
 
   it("管理后台在小屏上提供横向导航和单列筛选器", () => {

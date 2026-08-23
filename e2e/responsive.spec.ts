@@ -1,7 +1,22 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalOverflow } from "./support/storyverse-fixture";
+import {
+  cleanupAccounts,
+  completePretest,
+  createAccount,
+  expectNoHorizontalOverflow,
+  finishBrowserActivity,
+  loginThroughUi,
+  seedLobby,
+  type TestAccount,
+} from "./support/storyverse-fixture";
 
 test.describe("移动端、深路由与基础可访问性", () => {
+  const accounts: TestAccount[] = [];
+  test.afterEach(async ({ page }) => {
+    await finishBrowserActivity(page);
+    await cleanupAccounts(accounts.splice(0));
+  });
+
   for (const width of [320, 390, 768]) {
     test(`首页在 ${width}px 下无横向溢出`, async ({ page }) => {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 1024 });
@@ -37,4 +52,33 @@ test.describe("移动端、深路由与基础可访问性", () => {
       await expectNoHorizontalOverflow(page);
     });
   }
+
+  test("手机端点击综合匹配度可展开和关闭分项，且不产生横向溢出", async ({ page }) => {
+    const account = await createAccount({ displayName: "移动匹配度 E2E" });
+    accounts.push(account);
+    await completePretest(account);
+    const seeded = await seedLobby(account);
+    accounts.push(seeded.seedAuthor);
+
+    await loginThroughUi(page, account);
+    await expect(page).toHaveURL(/\/StarLobby$/);
+    const skipTour = page.getByRole("button", { name: /跳过本页|Skip this page/ });
+    await skipTour
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => skipTour.click())
+      .catch(() => undefined);
+    await page.getByRole("button", { name: /展开搜索|Open search/ }).click();
+    await page.getByPlaceholder(/搜索故事|Search stories/).fill("花园");
+    const storyStar = page.getByRole("button", { name: /打开星点故事.*花园里的陌生伙伴/ });
+    await storyStar.focus();
+    await page.keyboard.press("Enter");
+
+    const matchScore = page.getByRole("button", { name: /查看共鸣匹配度详情/ });
+    await expect(matchScore).toContainText("共鸣匹配度 82%");
+    await matchScore.click();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await matchScore.click();
+    await expect(page.getByRole("tooltip")).toBeHidden();
+  });
 });

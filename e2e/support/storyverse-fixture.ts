@@ -194,6 +194,42 @@ export async function seedLobby(account: TestAccount) {
     })),
   );
   if (translationError) throw translationError;
+  const ownStory = data?.find((story) => story.user_id === account.id);
+  const seedStory = data?.find((story) => story.source_kind === "seed");
+  const { data: config, error: configError } = await service
+    .from("algorithm_configs")
+    .select("id")
+    .eq("status", "published")
+    .order("version", { ascending: false })
+    .limit(1)
+    .single();
+  if (configError || !config || !ownStory || !seedStory)
+    throw configError ?? new Error("E2E recommendation fixture failed");
+  const { data: batch, error: batchError } = await service
+    .from("recommendation_batches")
+    .insert({
+      user_id: account.id,
+      reference_story_id: ownStory.id,
+      algorithm_config_id: config.id,
+      formula_version: "e2e-recommendation-v1",
+      city_mode: "similar",
+      stage_mode: "different",
+      theme_mode: "similar",
+    })
+    .select("id")
+    .single();
+  if (batchError || !batch) throw batchError ?? new Error("E2E recommendation batch failed");
+  const { error: resultError } = await service.from("recommendation_results").insert({
+    batch_id: batch.id,
+    story_id: seedStory.id,
+    rank: 1,
+    city_score: 0.32,
+    life_score: 0.68,
+    theme_score: 0.84,
+    semantic_score: 0.89,
+    final_score: 0.82,
+  });
+  if (resultError) throw resultError;
   return { seedAuthor, stories: data ?? [] };
 }
 

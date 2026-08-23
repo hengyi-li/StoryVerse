@@ -16,6 +16,7 @@ describe("analytics event contract", () => {
     expect(analyticsEventPriorities.star_exposed).toBe("P0");
     expect(analyticsEventPriorities.ai_organize_clicked).toBe("P1");
     expect(analyticsEventPriorities.lobby_gesture_summary).toBe("P2");
+    expect(analyticsEventPriorities.recommendation_score_breakdown_viewed).toBe("P2");
   });
 
   it("keeps the Edge Function whitelist in sync with the client event dictionary", () => {

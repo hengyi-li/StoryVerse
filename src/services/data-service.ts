@@ -4,6 +4,7 @@ import { functionRegionFor } from "../lib/function-region";
 import { cityByName } from "../data/cities";
 import type {
   InboxMessage,
+  RecommendationScores,
   ResonancePreferences,
   SavedDraft,
   Story,
@@ -36,7 +37,7 @@ export type StoryRecommendation = {
   story: Story;
   reason: string;
   batchId?: string;
-  scores?: Record<string, number>;
+  scores?: RecommendationScores;
 };
 
 export type StoryProgress = {

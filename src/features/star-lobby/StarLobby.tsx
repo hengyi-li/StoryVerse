@@ -1,4 +1,4 @@
-import { FormEvent, MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MutableRefObject, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Canvas, ThreeEvent, useFrame, useThree } from "@react-three/fiber";
 import { Line, OrbitControls, Points, PointMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
@@ -10,6 +10,7 @@ import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { localizedError } from "../../lib/localized-error";
 import { applyStoryTranslation, dataService } from "../../services/data-service";
 import { storyPosition } from "./star-position";
+import { recommendationScorePresentation, scorePercentage } from "./recommendation-score";
 import {
   hasReachedStarExposureThreshold,
   isMeaningfulStoryRead,
@@ -32,6 +33,7 @@ import type {
   InboxMessage,
   Language,
   PosttestStatus,
+  RecommendationScores,
   ResonancePreferences,
   StoryReaction,
   Story,
@@ -85,7 +87,7 @@ type StoryNodeData = {
   status: NonNullable<Story["status"]>;
   recommendationBatchId?: string;
   recommendationRank?: number;
-  recommendationScores?: Record<string, number>;
+  recommendationScores?: RecommendationScores;
   recommendationReason?: string;
 };
 
@@ -111,9 +113,22 @@ const starLobbyCopy = {
     translating: "正在翻译这篇故事…",
     translationPending: "正在准备忠实的中文译文，作者原文不会被修改。",
     translationFailed: "中文翻译暂时不可用，正在显示作者原文。",
-    stats: (words: number, cityScore: number) => `文本长度 ${words} / 城市接近度 ${Math.round(cityScore * 100)}%`,
+    wordCount: (words: number) => `文本长度 ${words}`,
+    resonanceMatch: (score: number) => `共鸣匹配度 ${score}%`,
+    referenceStory: "你的参照故事",
+    ownedStoryMetric: "你的故事",
+    curatedStory: "精选故事",
+    scoreDetailsAria: "查看共鸣匹配度详情",
+    referenceDetailsAria: "查看参照故事说明",
+    scoreDetailsTitle: "综合参考了你的共鸣选择",
+    cityPreference: (mode: "similar" | "different") => `城市偏好（${mode === "similar" ? "相近" : "相异"}）`,
+    lifePreference: (mode: "similar" | "different") => `人生背景偏好（${mode === "similar" ? "相近" : "相异"}）`,
+    themePreference: (mode: "similar" | "different") => `主题偏好（${mode === "similar" ? "相近" : "相异"}）`,
+    semanticSimilarity: "故事内容相似度",
+    scoreFormulaNote: "综合分按当前推荐公式加权计算",
+    referenceStoryNote: "其他故事会以这篇故事作为推荐比较基准。",
     legend:
-      "每个星点是一段故事：大小来自文本长度，颜色来自类型，距离只表示故事发生城市与你最近一篇公开故事的地理远近。",
+      "每个星点是一段故事：大小来自文本长度，颜色来自类型，位置距离只表示地理远近；故事卡片中的共鸣匹配度综合考虑城市、人生背景、主题与故事内容。",
     account: "个人账户",
     logout: "退出",
     profileTitle: "个人中心",
@@ -177,9 +192,25 @@ const starLobbyCopy = {
     translating: "Translating this story…",
     translationPending: "Preparing a faithful English version while keeping the author's original text unchanged.",
     translationFailed: "English translation is temporarily unavailable. The author's original text is shown.",
-    stats: (words: number, cityScore: number) => `${words} words / ${Math.round(cityScore * 100)}% city proximity`,
+    wordCount: (words: number) => `${words} words`,
+    resonanceMatch: (score: number) => `Resonance match ${score}%`,
+    referenceStory: "Your reference story",
+    ownedStoryMetric: "Your story",
+    curatedStory: "Featured story",
+    scoreDetailsAria: "View resonance match details",
+    referenceDetailsAria: "View reference story details",
+    scoreDetailsTitle: "Based on your resonance preferences",
+    cityPreference: (mode: "similar" | "different") =>
+      `City preference (${mode === "similar" ? "Similar" : "Different"})`,
+    lifePreference: (mode: "similar" | "different") =>
+      `Life background preference (${mode === "similar" ? "Similar" : "Different"})`,
+    themePreference: (mode: "similar" | "different") =>
+      `Theme preference (${mode === "similar" ? "Similar" : "Different"})`,
+    semanticSimilarity: "Story content similarity",
+    scoreFormulaNote: "The overall score uses the current weighted recommendation formula",
+    referenceStoryNote: "Other stories are compared with this story for recommendations.",
     legend:
-      "Each star is a story: size comes from length, color from type, and distance only shows geography relative to your latest published story.",
+      "Each star is a story: size comes from length, color from type, and position only shows geographic distance. The resonance match in each story card combines city, life background, theme and story content.",
     account: "Account",
     logout: "Log out",
     profileTitle: "Account center",
@@ -809,19 +840,23 @@ function GalaxyScene({
 function StoryPanel({
   node,
   language,
+  resonance,
   reaction,
   onClose,
   onReactionChange,
   onReportStory,
+  onScoreBreakdownView,
   translationPending = false,
   translationFailed = false,
 }: {
   node: StoryNodeData;
   language: Language;
+  resonance: ResonancePreferences;
   reaction: StoryReaction | null;
   onClose: () => void;
   onReactionChange?: (storyId: string, reaction: StoryReaction | null) => Promise<void> | void;
   onReportStory?: (storyId: string, reason: string, note: string) => Promise<void>;
+  onScoreBreakdownView?: (trigger: "hover" | "focus" | "tap") => void;
   translationPending?: boolean;
   translationFailed?: boolean;
 }) {
@@ -832,12 +867,62 @@ function StoryPanel({
   const [displayImageUrl, setDisplayImageUrl] = useState(node.imageUrl);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [scoreDetailsOpen, setScoreDetailsOpen] = useState(false);
+  const scoreDetailsId = useId();
+  const scoreDetailsRef = useRef<HTMLDivElement>(null);
   const ownStatus = node.status as keyof typeof text.ownStoryStatus;
+  const scorePresentation = recommendationScorePresentation({
+    scores: node.recommendationScores,
+    rawCityScore: node.cityScore,
+    resonance,
+    ownedByCurrentUser: node.ownedByCurrentUser,
+    isCenterStory: node.isCenterStory,
+  });
+  const overallPercentage = scorePercentage(scorePresentation.overall);
+  const scoreRows = [
+    { label: text.cityPreference(resonance.city), value: scorePresentation.city },
+    { label: text.lifePreference(resonance.stage), value: scorePresentation.life },
+    { label: text.themePreference(resonance.theme), value: scorePresentation.theme },
+    { label: text.semanticSimilarity, value: scorePresentation.semantic },
+  ].filter((row): row is { label: string; value: number } => row.value !== null);
+  const scoreMetricLabel =
+    scorePresentation.kind === "match" && overallPercentage !== null
+      ? text.resonanceMatch(overallPercentage)
+      : scorePresentation.kind === "reference"
+        ? text.referenceStory
+        : scorePresentation.kind === "owned"
+          ? text.ownedStoryMetric
+          : text.curatedStory;
+  const scoreDetailsAvailable = scorePresentation.kind === "match" || scorePresentation.kind === "reference";
+
+  const openScoreDetails = (trigger: "hover" | "focus" | "tap") => {
+    setScoreDetailsOpen(true);
+    if (scorePresentation.kind === "match") onScoreBreakdownView?.(trigger);
+  };
+
   useEffect(() => {
     setDisplayImageUrl(node.imageUrl);
     setImageLoaded(false);
     setImageFailed(false);
+    setScoreDetailsOpen(false);
   }, [node.id, node.imageUrl]);
+
+  useEffect(() => {
+    if (!scoreDetailsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!scoreDetailsRef.current?.contains(event.target as Node)) setScoreDetailsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setScoreDetailsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [scoreDetailsOpen]);
+
   const changeReaction = async (nextReaction: StoryReaction | null) => {
     if (reactionPending || !onReactionChange) return;
     setReactionPending(true);
@@ -930,14 +1015,71 @@ function StoryPanel({
             <span>{text.ownStoryStatus[ownStatus] ?? node.status}</span>
           </p>
         )}
-        <p className="story-panel-stats">
+        <div className="story-panel-stats">
           <b
             style={{
               background: node.color ?? categoryColors[node.category] ?? categoryColors.other_or_unclassifiable,
             }}
           />
-          {text.stats(node.words, node.cityScore)}
-        </p>
+          <span>{text.wordCount(node.words)}</span>
+          <span aria-hidden="true">/</span>
+          {scoreDetailsAvailable ? (
+            <div
+              className="story-score-explainer"
+              ref={scoreDetailsRef}
+              onMouseEnter={() => openScoreDetails("hover")}
+              onMouseLeave={() => setScoreDetailsOpen(false)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setScoreDetailsOpen(false);
+              }}
+            >
+              <button
+                type="button"
+                className="story-score-trigger"
+                aria-label={scorePresentation.kind === "match" ? text.scoreDetailsAria : text.referenceDetailsAria}
+                aria-expanded={scoreDetailsOpen}
+                aria-controls={scoreDetailsId}
+                aria-describedby={scoreDetailsOpen ? scoreDetailsId : undefined}
+                onFocus={() => {
+                  if (window.matchMedia("(hover: hover)").matches) openScoreDetails("focus");
+                }}
+                onClick={() => {
+                  if (window.matchMedia("(hover: none)").matches) {
+                    if (scoreDetailsOpen) setScoreDetailsOpen(false);
+                    else openScoreDetails("tap");
+                    return;
+                  }
+                  openScoreDetails("focus");
+                }}
+              >
+                <span>{scoreMetricLabel}</span>
+                <i aria-hidden="true">ⓘ</i>
+              </button>
+              {scoreDetailsOpen && (
+                <div className="story-score-popover" id={scoreDetailsId} role="tooltip">
+                  {scorePresentation.kind === "match" ? (
+                    <>
+                      <strong>{text.scoreDetailsTitle}</strong>
+                      <dl>
+                        {scoreRows.map((row) => (
+                          <div key={row.label}>
+                            <dt>{row.label}</dt>
+                            <dd>{scorePercentage(row.value)}%</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <small>{text.scoreFormulaNote}</small>
+                    </>
+                  ) : (
+                    <strong>{text.referenceStoryNote}</strong>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span>{scoreMetricLabel}</span>
+          )}
+        </div>
         {translationPending ? (
           <p role="status">{text.translationPending}</p>
         ) : (
@@ -1695,6 +1837,7 @@ export function StarLobby({
   const [posttestToast, setPosttestToast] = useState<{ id: number; message: string } | null>(null);
   const posttestToastId = useRef(0);
   const posttestReminderTracked = useRef(false);
+  const scoreBreakdownViewed = useRef(new Set<string>());
   const initialBatchId = stories.find((story) => story.recommendationBatchId)?.recommendationBatchId ?? null;
   const [lobbyViewId, setLobbyViewId] = useState(() => createLobbyView(initialBatchId));
   const lobbyViewIdRef = useRef(lobbyViewId);
@@ -1876,6 +2019,19 @@ export function StarLobby({
     recommendation_reason: node.recommendationReason ?? null,
     resonance_preferences: confirmedResonanceRef.current,
   });
+
+  const trackScoreBreakdownView = (node: StoryNodeData, trigger: "hover" | "focus" | "tap") => {
+    const eventKey = `${lobbyViewId}:${node.id}`;
+    if (scoreBreakdownViewed.current.has(eventKey) || node.recommendationScores?.final_score == null) return;
+    scoreBreakdownViewed.current.add(eventKey);
+    track("recommendation_score_breakdown_viewed", {
+      story_id: node.id,
+      final_score: node.recommendationScores.final_score,
+      rank: node.recommendationRank ?? null,
+      trigger,
+      resonance_preferences: confirmedResonanceRef.current,
+    });
+  };
 
   const finishRead = (endReason: string) => {
     const session = readSession.current;
@@ -2183,6 +2339,7 @@ export function StarLobby({
           key={selectedNode.id}
           node={selectedNode}
           language={language}
+          resonance={confirmedResonance}
           reaction={reactions[selectedNode.id] ?? null}
           onClose={() => {
             track("story_panel_closed", { story_id: selectedNode.id, reason: "close_button" });
@@ -2198,6 +2355,7 @@ export function StarLobby({
             await onReactionChange?.(storyId, reaction);
           }}
           onReportStory={onReportStory}
+          onScoreBreakdownView={(trigger) => trackScoreBreakdownView(selectedNode, trigger)}
           translationPending={
             selectedNode.sourceLanguage !== language && translationPendingIds.includes(selectedNode.id)
           }

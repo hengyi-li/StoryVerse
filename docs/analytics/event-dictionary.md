@@ -95,6 +95,7 @@
 | `posttest_step_saved`                                             | 当前部分服务端保存成功               | questionnaire_version、step、answer_count   | ANA-14    |
 | `posttest_submitted`                                              | 41 题锁定提交成功                    | questionnaire_version、step、answer_count   | ANA-14    |
 | `posttest_completed_button_clicked`                               | 已完成用户再次点击问卷按钮           | questionnaire_version、status               | ANA-14    |
+| `recommendation_score_breakdown_viewed`                           | 大厅综合匹配度说明首次展开           | story、final_score、rank、trigger、共鸣选择 | ANA-09    |
 
 ## 不触发规则
 
@@ -126,7 +127,7 @@
 | `ai_label_edited`、`story_label_*`、`story_custom_theme_added`                                                   | AI 标签修改率                              | `src/features/story-editor/StoryEditor.tsx`                                                      | UI 旅程验证 AI 类型修改事件                                        |
 | `publish_clicked`、`story_submit_result`、`pending_review_lobby_entered`                                         | 首次故事完成率、发布/待审漏斗              | `src/app/App.tsx`、`src/features/story-editor/StoryEditor.tsx`                                   | 业务 E2E 验证公开流程；本地脚本包含人工审核兜底分支                |
 | `resonance_*`（不含 `lobby_` 前缀）                                                                              | 首次共鸣页漏斗                             | `src/features/resonance/ResonancePage.tsx`                                                       | UI 旅程验证页面、维度和首次确认；不计作大厅重排                    |
-| `recommendation_*`                                                                                               | 推荐曝光、点击、刷新与大厅到达             | `src/features/recommendations/RecommendationsPage.tsx`                                           | UI 旅程验证推荐页到大厅路径                                        |
+| `recommendation_*`                                                                                               | 推荐曝光、点击、刷新、大厅到达与匹配度解释 | `RecommendationsPage.tsx`、`StarLobby.tsx`                                                       | UI 旅程验证推荐页到大厅，并展开综合匹配度说明                      |
 | `tour_*`                                                                                                         | 引导开始、步骤、完成和跳过率               | `src/features/tour/Tour.tsx`                                                                     | UI 旅程分别走完完成与跳过分支                                      |
 | `image_*`                                                                                                        | 风格分布、生成成功率、复用与下载           | `src/features/story-editor/StoryEditor.tsx`                                                      | UI 旅程真实生成 2048×2048 图片；图片对象随后清理                   |
 | `city_*`、`story_metadata_changed`、`story_field_focused`                                                        | 城市搜索、字段填写与写作操作               | `StoryEditorFields.tsx`、`StoryEditor.tsx`                                                       | UI 旅程验证北京搜索和选择                                          |

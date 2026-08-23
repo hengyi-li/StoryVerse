@@ -6,6 +6,7 @@ import {
   finishBrowserActivity,
   loginThroughUi,
   seedLobby,
+  service,
   type TestAccount,
 } from "./support/storyverse-fixture";
 
@@ -42,6 +43,28 @@ test.describe("StarLobby 阅读、反馈与后测", () => {
     await storyStar.focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".story-panel")).toContainText("花园里的陌生伙伴");
+    const matchScore = page.getByRole("button", { name: /查看共鸣匹配度详情/ });
+    await expect(matchScore).toContainText("共鸣匹配度 82%");
+    await matchScore.hover();
+    const scoreDetails = page.getByRole("tooltip");
+    await expect(scoreDetails).toContainText("综合参考了你的共鸣选择");
+    await expect(scoreDetails).toContainText("人生背景偏好（相异）");
+    await expect(scoreDetails).toContainText("68%");
+    await expect(scoreDetails).toContainText("84%");
+    await expect(scoreDetails).toContainText("89%");
+    await page.locator(".story-panel h2").hover();
+    await matchScore.hover();
+    await expect
+      .poll(async () => {
+        const { count, error } = await service
+          .from("analytics_events")
+          .select("event_id", { count: "exact", head: true })
+          .eq("user_id", account.id)
+          .eq("event_name", "recommendation_score_breakdown_viewed");
+        if (error) throw error;
+        return count;
+      })
+      .toBe(1);
     await page.getByRole("button", { name: /^不喜欢$/ }).click();
     await expect(page.locator(".story-panel-reaction-feedback")).toBeVisible();
     await expect(page.getByRole("button", { name: /^已不喜欢$/ })).toHaveAttribute("aria-pressed", "true");

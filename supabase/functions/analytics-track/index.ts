@@ -76,6 +76,7 @@ const eventPriorities: Record<string, AnalyticsPriority> = {
   recommendation_card_clicked: "P2",
   recommendation_refresh_clicked: "P2",
   recommendation_lobby_entered: "P2",
+  recommendation_score_breakdown_viewed: "P2",
   lobby_search_opened: "P2",
   lobby_gesture_summary: "P2",
   story_panel_closed: "P2",

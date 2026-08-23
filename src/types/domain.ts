@@ -10,6 +10,16 @@ export type ScreenId =
 export type StoryEditorStep = 0 | 1 | 2 | 3;
 export type TourSceneId = "starLobby" | "guide" | "collection" | "confirm" | "resonance";
 export type ResonancePreferences = Record<"city" | "stage" | "theme", ResonanceMode>;
+
+export interface RecommendationScores {
+  rank: number;
+  city_score: number;
+  life_score: number;
+  theme_score: number;
+  semantic_score: number;
+  final_score: number;
+}
+
 export type PretestStatus = "not_required" | "not_started" | "in_progress" | "completed" | "declined";
 export type PretestStep = 1 | 2 | 3 | 4;
 
@@ -120,7 +130,7 @@ export interface Story {
   /** 生成当前推荐位置的可追溯批次；作者自己的中心故事没有推荐批次。 */
   recommendationBatchId?: string;
   recommendationRank?: number;
-  recommendationScores?: Record<string, number>;
+  recommendationScores?: RecommendationScores;
   recommendationReason?: string;
   visualStatus: "none" | "ready" | "generating" | "failed" | "blocked";
   /** 已缓存的目标语言版本；原文始终保留在 Story 自身字段中。 */
