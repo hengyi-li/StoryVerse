@@ -1,10 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   cleanupAccountByUsername,
   finishBrowserActivity,
   openGatewayAuth,
   uniqueAccount,
 } from "./support/storyverse-fixture";
+
+async function selectPretestOption(page: Page, field: string, value: string) {
+  const root = page.locator(`[data-field="${field}"]`);
+  await root.locator(".pretest-select-trigger").click();
+  await root.locator(`[data-option-value="${value}"]`).click();
+}
 
 test.describe("账号与前测门禁", () => {
   const createdUsernames: string[] = [];
@@ -45,9 +51,10 @@ test.describe("账号与前测门禁", () => {
     await page.getByRole("button", { name: /同意 \/ Agree/ }).click();
     await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
 
-    await page.locator('[data-field="birthYear"] select').selectOption("1995");
-    await page.locator('[data-field="gender"] select').selectOption("male");
-    await page.locator('[data-field="residenceRegion"] select').selectOption("overseas");
+    await selectPretestOption(page, "birthYear", "1995");
+    await expect(page.locator('[data-field="birthYear"] .pretest-select-trigger')).toHaveText("1995");
+    await selectPretestOption(page, "gender", "male");
+    await selectPretestOption(page, "residenceRegion", "overseas");
     await page.locator('[data-field="countryRegion"] input').fill("Singapore");
     await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
     await expect(page.getByText("03 / 04")).toBeVisible();
@@ -55,18 +62,32 @@ test.describe("账号与前测门禁", () => {
     await page.reload();
     await expect(page.getByText("03 / 04")).toBeVisible();
     await expect(page.locator('[data-field="ethnicity"]')).toBeVisible();
-    await page.locator('[data-field="ethnicity"] select').selectOption("not_chinese_citizen");
-    await page.locator('[data-field="education"] select').selectOption("bachelor");
+    await selectPretestOption(page, "ethnicity", "not_chinese_citizen");
+    await selectPretestOption(page, "education", "bachelor");
     await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
 
-    const employment = page.locator('[data-field="employment"] select');
-    await employment.selectOption("full_time");
+    const employment = page.locator('[data-field="employment"]');
+    await employment.locator(".pretest-select-trigger").click();
+    const longOption = employment.locator('[data-option-value="full_time"]');
+    await expect(longOption.locator("small[lang='en']")).toBeVisible();
+    expect(
+      await longOption.evaluate((node) => {
+        const zh = node.querySelector<HTMLElement>("span[lang='zh-CN']")!.getBoundingClientRect();
+        const en = node.querySelector<HTMLElement>("small[lang='en']")!.getBoundingClientRect();
+        return en.top >= zh.bottom;
+      }),
+    ).toBe(true);
+    await longOption.click();
     await expect(page.locator('[data-field="industryPrimary"]')).toBeVisible();
-    await employment.selectOption("student_unpaid");
+    await selectPretestOption(page, "employment", "student_unpaid");
     await expect(page.locator('[data-field="industryPrimary"]')).toHaveCount(0);
     await expect(page.locator('[data-field="discipline"]')).toBeVisible();
-    await page.locator('[data-field="discipline"] select').selectOption({ index: 1 });
-    await page.locator('[data-field="major"] select').selectOption({ index: 1 });
+    const discipline = page.locator('[data-field="discipline"]');
+    await discipline.locator(".pretest-select-trigger").click();
+    await discipline.locator("[data-option-value]").first().click();
+    const major = page.locator('[data-field="major"]');
+    await major.locator(".pretest-select-trigger").click();
+    await major.locator("[data-option-value]").first().click();
     await page.getByRole("button", { name: /提交并开始|Submit & begin/ }).click();
 
     await expect(page).toHaveURL(/\/StoryStart$/);

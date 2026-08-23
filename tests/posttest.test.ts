@@ -17,6 +17,14 @@ describe("PostTest questionnaire contract", () => {
     expect(posttestSections.flatMap((section) => section.items).every((item) => item.zh && item.en)).toBe(true);
   });
 
+  it("hides section theme names while retaining accessible progress", () => {
+    const page = readFileSync("src/features/posttest/PostTestPage.tsx", "utf8");
+    expect(page).not.toContain("<b>{item.titleZh}</b>");
+    expect(page).not.toContain('<h2 id="posttest-step-title">{section.titleZh}</h2>');
+    expect(page).toContain("posttest-visually-hidden");
+    expect(page).toContain("Part {step} of 5");
+  });
+
   it("uses the fixed 1–5 scale and requires the image items", () => {
     expect(posttestScale.map((option) => option.value)).toEqual([1, 2, 3, 4, 5]);
     expect(missingPosttestItems(5, {})).toContain("authorship_ai_05");

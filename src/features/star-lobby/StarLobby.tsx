@@ -1217,6 +1217,7 @@ function FloatingMenu({
           key={item.id}
           data-tour={`nav-${item.id}`}
           className={`neon-control dock-item ${activeView === item.id ? "is-active" : ""}`}
+          aria-label={`${item.zh} / ${item.en}`}
           onClick={() => onChange(item.id)}
         >
           <span className="nav-icon">

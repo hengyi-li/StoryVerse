@@ -1,6 +1,7 @@
 import { CSSProperties, RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import generatedPortalBg from "../../assets/auragate-portal-bg-transparent.webp";
 import nightWorldBg from "../../assets/storyverse-night-bg.webp";
+import tightWordmark from "../../assets/storyverse-wordmark-tight.svg";
 import { BrandLogo } from "../../components/BrandLogo";
 import { localizedError } from "../../lib/localized-error";
 import { track } from "../../lib/analytics";
@@ -97,10 +98,15 @@ function UnifiedLanguageButton({ language, onChange }: { language: Language; onC
   );
 }
 
-function LoginWordmark({ isMobile }: { isMobile: boolean }) {
+function LoginWordmark() {
   return (
     <span style={styles.loginWordmarkLoose}>
-      <BrandLogo inverted style={{ width: isMobile ? 154 : 238 }} />
+      <img
+        className="gateway-login-wordmark brand-logo-inverted"
+        src={tightWordmark}
+        alt="StoryVerse"
+        draggable={false}
+      />
     </span>
   );
 }
@@ -573,10 +579,9 @@ export function Gateway({
 
       <section ref={previewRef} style={{ ...styles.sectionTwo, paddingTop: isMobile ? "12vh" : "14vh" }}>
         <div style={styles.sectionHeader}>
-          <h2 style={{ ...styles.sectionTitle, fontSize: "clamp(34px,4vw,52px)" }}>
-            {t.previewTitle[0]}
-            <br />
-            {t.previewTitle[1]}
+          <h2 className="gateway-preview-quote" style={{ ...styles.sectionTitle, fontSize: "clamp(34px,4vw,52px)" }}>
+            <span>{t.previewQuote}</span>
+            <cite>{t.previewAuthor}</cite>
           </h2>
           <p style={styles.sectionSubtitle}>{t.previewSubtitle}</p>
         </div>
@@ -782,7 +787,7 @@ function ImmersiveLogin({
           <h2 style={{ ...styles.loginTitle, fontSize: isMobile ? 44 : 72 }}>
             <span style={styles.welcomeLight}>{t.welcome}</span>
             <span style={styles.loginWordmarkLine}>
-              <LoginWordmark isMobile={isMobile} />
+              <LoginWordmark />
             </span>
           </h2>
         </div>
@@ -816,18 +821,6 @@ function ImmersiveLogin({
               {t.login}
             </button>
           </div>
-          {mode === "signup" && (
-            <label style={styles.fieldLabel}>
-              {t.nickname}
-              <input
-                style={styles.inputShell}
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-                type="text"
-                placeholder={t.nicknamePlaceholder}
-              />
-            </label>
-          )}
           <label style={styles.fieldLabel}>
             {t.accountIdentifier}
             <input
@@ -933,6 +926,20 @@ function ImmersiveLogin({
                       : "Enter 2–80 characters and remember this answer"
                   }
                 />
+              </label>
+              <label style={styles.fieldLabel}>
+                {t.nickname}
+                <input
+                  style={styles.inputShell}
+                  value={nickname}
+                  onChange={(event) => setNickname(event.target.value)}
+                  type="text"
+                  placeholder={t.nickname}
+                  aria-describedby="signup-nickname-hint"
+                />
+                <small id="signup-nickname-hint" style={styles.fieldFeedback}>
+                  {t.nicknameHint}
+                </small>
               </label>
             </>
           )}

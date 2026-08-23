@@ -53,6 +53,9 @@ describe("手机端响应式设计契约", () => {
     expect(starLobbyCss).toMatch(
       /@media \(max-width: 760px\)[\s\S]*?\.story-score-popover \{[\s\S]*?position: static;[\s\S]*?width: 100%/,
     );
+    expect(starLobbyCss).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.nav-label,[\s\S]*?display: none;[\s\S]*?opacity: 0/,
+    );
   });
 
   it("管理后台在小屏上提供横向导航和单列筛选器", () => {

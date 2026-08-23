@@ -190,6 +190,31 @@ button {
 .brand-logo-inverted {
   filter: brightness(0) invert(1) drop-shadow(0 8px 20px rgba(0, 0, 0, 0.2));
 }
+.gateway-preview-quote {
+  width: min(920px, calc(100% - 32px));
+  margin-inline: auto !important;
+  padding-inline: 8px;
+  overflow-wrap: anywhere;
+}
+.gateway-preview-quote > span,
+.gateway-preview-quote cite {
+  display: block;
+}
+.gateway-preview-quote cite {
+  margin-top: 8px;
+  font-size: 0.72em;
+  font-style: normal;
+  font-weight: 430;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.gateway-login-wordmark {
+  display: block;
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+  user-select: none;
+}
 .pill {
   display: inline-flex;
   align-items: center;
@@ -6801,6 +6826,52 @@ textarea::placeholder {
   line-height: 1.6;
   text-align: right;
 }
+.system-dictation-guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 1px 0 9px;
+  padding: 9px 11px;
+  border: 1px solid rgba(7, 142, 197, 0.2);
+  border-radius: 11px;
+  color: #155d7c;
+  background: rgba(72, 201, 243, 0.08);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.system-dictation-guide b {
+  flex: 0 0 auto;
+  color: var(--blue);
+  font-size: 19px;
+  line-height: 1;
+  animation: dictationCaret 0.9s steps(1, end) infinite;
+}
+.story-form textarea[data-story-body-input] {
+  caret-color: #078ec5;
+}
+.story-form textarea[data-story-body-input]:focus {
+  border-color: rgba(7, 142, 197, 0.62);
+  box-shadow: 0 0 0 3px rgba(7, 142, 197, 0.12);
+}
+.theme-night .system-dictation-guide {
+  border-color: rgba(112, 220, 255, 0.22);
+  color: rgba(209, 242, 255, 0.86);
+  background: rgba(72, 201, 243, 0.09);
+}
+.theme-night .story-form textarea[data-story-body-input] {
+  caret-color: #80ddff;
+}
+@keyframes dictationCaret {
+  0%,
+  48% {
+    opacity: 1;
+  }
+  49%,
+  100% {
+    opacity: 0;
+  }
+}
 .theme-night .voice-error {
   color: #ff9d8a;
 }
@@ -6951,6 +7022,21 @@ svg {
     min-height: 100dvh !important;
     padding-right: var(--mobile-safe-right) !important;
     padding-left: var(--mobile-safe-left) !important;
+  }
+
+  .gateway-preview-quote {
+    width: min(100% - 24px, 620px);
+    font-size: clamp(30px, 9vw, 42px) !important;
+    line-height: 1.12 !important;
+  }
+
+  .gateway-preview-quote cite {
+    margin-top: 10px;
+    font-size: 0.72em;
+  }
+
+  .gateway-login-wordmark {
+    width: clamp(180px, 50vw, 196px);
   }
 
   .gateway-login-copy {

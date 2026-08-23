@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, RefreshCw } from "lucide-react";
 import { AppLogo, LanguageSelect, ThemeToggle } from "../../components/AppControls";
 import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
@@ -17,7 +17,6 @@ import {
   genderOptions,
   needsIndustry,
   needsMajor,
-  optionText,
   residenceOptions,
 } from "./pretest-content";
 import {
@@ -102,15 +101,134 @@ function Select({
   onChange: (value: string) => void;
   placeholder?: string;
 }) {
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const selectedIndex = options.findIndex((option) => option.value === String(value ?? ""));
+  const [activeIndex, setActiveIndex] = useState(Math.max(0, selectedIndex));
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : null;
+
+  useEffect(() => {
+    if (!open) return;
+    const closeFromOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    return () => document.removeEventListener("pointerdown", closeFromOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    rootRef.current
+      ?.querySelector<HTMLElement>(`[data-option-index="${activeIndex}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open]);
+
+  const choose = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  const openWithIndex = (index: number) => {
+    setActiveIndex(Math.min(Math.max(index, 0), Math.max(options.length - 1, 0)));
+    setOpen(true);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      if (!open) openWithIndex(selectedIndex >= 0 ? selectedIndex : direction > 0 ? 0 : options.length - 1);
+      else setActiveIndex((index) => Math.min(Math.max(index + direction, 0), options.length - 1));
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      openWithIndex(event.key === "Home" ? 0 : options.length - 1);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (open) choose(activeIndex);
+      else openWithIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      return;
+    }
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      setOpen(false);
+    }
+    if (event.key === "Tab") setOpen(false);
+  };
+
+  const renderOptionCopy = (option: BilingualOption | null) => {
+    if (!option) {
+      const [zh, en] = placeholder.split(" / ");
+      return (
+        <span className="pretest-select-placeholder">
+          <span>{zh}</span>
+          {en && <small>{en}</small>}
+        </span>
+      );
+    }
+    const singleLine = option.labelZh.trim() === option.labelEn.trim();
+    return (
+      <span className={`pretest-select-copy ${singleLine ? "single-line" : ""}`}>
+        <span lang="zh-CN">{option.labelZh}</span>
+        {!singleLine && <small lang="en">{option.labelEn}</small>}
+      </span>
+    );
+  };
+
   return (
-    <select value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
-      <option value="">{placeholder}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {optionText(option)}
-        </option>
-      ))}
-    </select>
+    <div className={`pretest-select ${open ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="pretest-select-trigger"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-haspopup="listbox"
+        aria-activedescendant={open && options[activeIndex] ? `${listboxId}-option-${activeIndex}` : undefined}
+        onClick={() => (open ? setOpen(false) : openWithIndex(selectedIndex >= 0 ? selectedIndex : 0))}
+        onKeyDown={handleKeyDown}
+      >
+        {renderOptionCopy(selectedOption)}
+        <span className="pretest-select-chevron" aria-hidden="true" />
+      </button>
+      {open && (
+        <ul id={listboxId} className="pretest-select-menu" role="listbox" aria-label={placeholder}>
+          {options.map((option, index) => (
+            <li
+              id={`${listboxId}-option-${index}`}
+              key={option.value}
+              role="option"
+              aria-selected={selectedIndex === index}
+              className={`${activeIndex === index ? "is-active" : ""} ${selectedIndex === index ? "is-selected" : ""}`}
+              data-option-index={index}
+              data-option-value={option.value}
+              onPointerMove={() => setActiveIndex(index)}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                choose(index);
+              }}
+            >
+              {renderOptionCopy(option)}
+              {selectedIndex === index && <Check size={16} aria-hidden="true" />}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -152,7 +270,7 @@ export function validatePretestStep(step: PretestStep, values: PretestAnswers): 
 
 export const birthYearOptions: BilingualOption[] = Array.from({ length: 127 }, (_, index) => {
   const year = 2026 - index;
-  return { value: String(year), labelZh: `${year} 年`, labelEn: String(year) };
+  return { value: String(year), labelZh: String(year), labelEn: String(year) };
 });
 
 const stepLabels = [
@@ -234,7 +352,9 @@ export function PreTestPage({
     window.requestAnimationFrame(() => {
       const first = fields[0];
       const target = first
-        ? document.querySelector<HTMLElement>(`[data-field="${first}"] select, [data-field="${first}"] input`)
+        ? document.querySelector<HTMLElement>(
+            `[data-field="${first}"] .pretest-select-trigger, [data-field="${first}"] input`,
+          )
         : document.querySelector<HTMLElement>(".pretest-choice-button");
       target?.focus();
       target?.scrollIntoView({ behavior: "smooth", block: "center" });

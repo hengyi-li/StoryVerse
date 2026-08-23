@@ -2,6 +2,10 @@ import type { Language } from "../types/domain";
 
 export const MAX_SPEECH_DURATION_MS = 60_000;
 
+export function shouldUseSystemDictation(coarsePointer: boolean, narrowViewport: boolean) {
+  return coarsePointer || narrowViewport;
+}
+
 export type SpeechRecognitionHandle = {
   stop: () => Promise<string>;
   cancel: () => void;

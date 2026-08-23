@@ -1722,8 +1722,22 @@
     width: auto;
   }
 
-  .dock-item:hover {
+  .dock-item:hover,
+  .dock-item.is-active:hover {
     width: 48px;
+  }
+
+  .dock-item:hover .nav-icon,
+  .dock-item.is-active:hover .nav-icon {
+    transform: none;
+    opacity: 1;
+  }
+
+  .nav-label,
+  .dock-item:hover .nav-label,
+  .dock-item.is-active:hover .nav-label {
+    display: none;
+    opacity: 0;
   }
 
   .bottom-legend {

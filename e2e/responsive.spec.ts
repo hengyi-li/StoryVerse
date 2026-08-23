@@ -37,10 +37,32 @@ test.describe("移动端、深路由与基础可访问性", () => {
     await expect(auth).toBeVisible();
     await expectNoHorizontalOverflow(page);
     const username = auth.getByLabel(/^Username/);
+    const recoveryAnswer = auth.getByLabel(/^Password recovery answer/);
+    const nickname = auth.getByLabel(/^Nickname/);
+    const recoveryBox = await recoveryAnswer.boundingBox();
+    const nicknameBox = await nickname.boundingBox();
+    expect(recoveryBox && nicknameBox && nicknameBox.y > recoveryBox.y).toBe(true);
+    await expect(auth.getByText("Others will see this instead of username")).toBeVisible();
+    const loginWordmark = auth.locator(".gateway-login-wordmark");
+    await expect(loginWordmark).toBeVisible();
+    expect((await loginWordmark.boundingBox())?.width).toBeGreaterThanOrEqual(180);
     await username.focus();
     await expect(username).toBeFocused();
     await page.keyboard.press("Tab");
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("type"))).toBe("password");
+  });
+
+  test("手机欢迎页署名更小且正文不会横向溢出", async ({ page }) => {
+    await page.goto("/");
+    const author = page.locator(".gateway-preview-quote cite");
+    await author.scrollIntoViewIfNeeded();
+    await expect(author).toBeVisible();
+    const sizes = await page.locator(".gateway-preview-quote").evaluate((node) => ({
+      quote: Number.parseFloat(getComputedStyle(node).fontSize),
+      author: Number.parseFloat(getComputedStyle(node.querySelector("cite")!).fontSize),
+    }));
+    expect(sizes.author).toBeLessThan(sizes.quote);
+    await expectNoHorizontalOverflow(page);
   });
 
   for (const route of ["/PreTest", "/PostTest", "/StoryStart", "/StoryWrite", "/StoryPage", "/StarLobby"]) {
@@ -67,6 +89,12 @@ test.describe("移动端、深路由与基础可访问性", () => {
       .waitFor({ state: "visible", timeout: 5_000 })
       .then(() => skipTour.click())
       .catch(() => undefined);
+    const dockItems = page.locator(".floating-nav .dock-item");
+    await expect(dockItems).toHaveCount(4);
+    for (let index = 0; index < 4; index += 1) {
+      await expect(dockItems.nth(index).locator(".nav-icon")).toBeVisible();
+      await expect(dockItems.nth(index).locator(".nav-label")).toBeHidden();
+    }
     await page.getByRole("button", { name: /展开搜索|Open search/ }).click();
     await page.getByPlaceholder(/搜索故事|Search stories/).fill("花园");
     const storyStar = page.getByRole("button", { name: /打开星点故事.*花园里的陌生伙伴/ });
@@ -80,5 +108,28 @@ test.describe("移动端、深路由与基础可访问性", () => {
     await expectNoHorizontalOverflow(page);
     await matchScore.click();
     await expect(page.getByRole("tooltip")).toBeHidden();
+  });
+
+  test("手机语音按钮只聚焦故事正文并显示系统听写引导", async ({ page }) => {
+    const account = await createAccount({ displayName: "手机听写 E2E", pretestRequired: false });
+    accounts.push(account);
+    await loginThroughUi(page, account);
+    await expect(page).toHaveURL(/\/StoryStart$/);
+    await page.goto("/StoryWrite");
+    await expect(page).toHaveURL(/\/StoryWrite$/);
+    const storyTour = page.locator(".tour-layer");
+    await storyTour
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => storyTour.locator(".tour-skip").click())
+      .catch(() => undefined);
+    await expect(storyTour).toBeHidden();
+    const voiceButton = page.locator('[data-voice-mode="system-keyboard"]');
+    await expect(voiceButton).toContainText(/使用键盘语音输入|Use keyboard dictation/);
+    await voiceButton.click();
+    const body = page.locator("textarea[data-story-body-input]");
+    await expect(body).toBeFocused();
+    await expect(page.locator("#system-dictation-guide")).toBeVisible();
+    await expect(page.getByLabel(/^标题/)).not.toBeFocused();
+    await expectNoHorizontalOverflow(page);
   });
 });

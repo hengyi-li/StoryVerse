@@ -36,6 +36,9 @@ describe("PreTest conditional form", () => {
     expect(birthYearOptions).toHaveLength(127);
     expect(birthYearOptions[0].value).toBe("2026");
     expect(birthYearOptions.at(-1)?.value).toBe("1900");
+    expect(birthYearOptions.every((option) => option.labelZh === option.value && option.labelEn === option.value)).toBe(
+      true,
+    );
   });
 
   it("accepts both birth-year boundaries and rejects values outside them", () => {

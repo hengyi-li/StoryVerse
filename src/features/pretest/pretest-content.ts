@@ -85,10 +85,6 @@ export const employmentOptions: BilingualOption[] = [
 export const industryEmployment = new Set(["full_time", "internship_part_time", "freelancer"]);
 export const majorEducation = new Set(["associate", "bachelor", "postgraduate"]);
 
-export function optionText(option: BilingualOption) {
-  return `${option.labelZh} / ${option.labelEn}`;
-}
-
 export function needsIndustry(employment: string) {
   return industryEmployment.has(employment);
 }

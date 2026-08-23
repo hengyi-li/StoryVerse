@@ -193,12 +193,12 @@ export function PostTestPage({
           </p>
           <ol>
             {posttestSections.map((item) => (
-              <li key={item.step} className={item.step === step ? "current" : item.step < step ? "done" : ""}>
+              <li
+                key={item.step}
+                className={item.step === step ? "current" : item.step < step ? "done" : ""}
+                aria-label={`${item.titleZh} / ${item.titleEn}`}
+              >
                 <span>{item.step < step ? <Check size={15} /> : item.step}</span>
-                <div>
-                  <b>{item.titleZh}</b>
-                  <small>{item.titleEn}</small>
-                </div>
               </li>
             ))}
           </ol>
@@ -210,9 +210,12 @@ export function PostTestPage({
             <span style={{ width: `${step * 20}%` }} />
           </div>
           <header className="posttest-step-heading">
-            <span>0{step} / 05</span>
-            <h2 id="posttest-step-title">{section.titleZh}</h2>
-            <p>{section.titleEn}</p>
+            <span>
+              第 {step}/5 部分 · Part {step} of 5
+            </span>
+            <h2 id="posttest-step-title" className="posttest-visually-hidden">
+              {section.titleZh} / {section.titleEn}
+            </h2>
             <div className="posttest-scale-explanation">
               <p>请根据您在系统中的实际体验，如实回答以下问题。每道题均为必答。</p>
               <p>Please answer every item based on your actual experience with the system.</p>

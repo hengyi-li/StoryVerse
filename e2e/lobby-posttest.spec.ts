@@ -75,6 +75,9 @@ test.describe("StarLobby 阅读、反馈与后测", () => {
 
     await page.getByRole("button", { name: /后测问卷待填写/ }).click();
     await expect(page).toHaveURL(/\/PostTest$/);
+    await expect(page.locator(".posttest-step-heading h2")).toBeHidden();
+    await expect(page.locator(".posttest-sidebar li div")).toHaveCount(0);
+    await expect(page.locator(".posttest-step-heading > span")).toContainText("Part 1 of 5");
     await expect(page.locator(".posttest-scale-header")).toHaveCount(0);
     await page.getByRole("button", { name: /下一步 \/ Next/ }).click();
     await expect(page.getByRole("alert").first()).toContainText(/请选择一个分值/);
@@ -86,7 +89,7 @@ test.describe("StarLobby 阅读、反馈与后测", () => {
         await items.nth(index).locator('input[value="4"]').check();
       }
       await page.getByRole("button", { name: step === 5 ? /提交问卷|Submit/ : /下一步 \/ Next/ }).click();
-      if (step < 5) await expect(page.getByText(`0${step + 1} / 05`)).toBeVisible();
+      if (step < 5) await expect(page.locator(".posttest-step-heading > span")).toContainText(`Part ${step + 1} of 5`);
     }
 
     await expect(page).toHaveURL(/\/StarLobby$/);

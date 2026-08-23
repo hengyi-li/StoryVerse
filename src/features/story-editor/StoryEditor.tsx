@@ -12,7 +12,7 @@ import { dataService } from "../../services/data-service";
 import { createStoryImagePreview, downloadStoryImage } from "../../services/story-image";
 import type { ImageStyle, StoryHighlight } from "../../services/story-image";
 import { formatCoords, resolvePlaceCoordinates } from "../../services/place-search";
-import { startSpeechRecognition } from "../../services/speech-input";
+import { shouldUseSystemDictation, startSpeechRecognition } from "../../services/speech-input";
 import type { SpeechRecognitionHandle } from "../../services/speech-input";
 import { Tour } from "../tour/Tour";
 import type { TourCallbacks } from "../tour/tour-types";
@@ -97,7 +97,16 @@ export function StoryEditor({
   /* 语音输入：listening 表示浏览器正在识别，processing 表示正在收取最终文字。 */
   const [speechState, setSpeechState] = useState<"idle" | "listening" | "processing">("idle");
   const [speechError, setSpeechError] = useState("");
+  const [systemDictationMode, setSystemDictationMode] = useState(() =>
+    shouldUseSystemDictation(
+      window.matchMedia("(pointer: coarse)").matches,
+      window.matchMedia("(max-width: 767px)").matches,
+    ),
+  );
+  const [systemDictationGuide, setSystemDictationGuide] = useState(false);
   const speechRecognitionRef = useRef<SpeechRecognitionHandle | null>(null);
+  const storyBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const systemDictationBaseline = useRef<number | null>(null);
   const [customTheme, setCustomTheme] = useState("");
   const [themeTagError, setThemeTagError] = useState("");
   const [removedThemeTags, setRemovedThemeTags] = useState<StoryThemeTag[]>([]);
@@ -158,6 +167,18 @@ export function StoryEditor({
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("focus", sync);
       window.removeEventListener("blur", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    const coarsePointer = window.matchMedia("(pointer: coarse)");
+    const narrowViewport = window.matchMedia("(max-width: 767px)");
+    const sync = () => setSystemDictationMode(shouldUseSystemDictation(coarsePointer.matches, narrowViewport.matches));
+    coarsePointer.addEventListener("change", sync);
+    narrowViewport.addEventListener("change", sync);
+    return () => {
+      coarsePointer.removeEventListener("change", sync);
+      narrowViewport.removeEventListener("change", sync);
     };
   }, []);
 
@@ -650,6 +671,17 @@ export function StoryEditor({
    */
   const toggleSpeechInput = async () => {
     setSpeechError("");
+    if (systemDictationMode) {
+      usedVoiceInput.current = true;
+      systemDictationBaseline.current = draft.body.length;
+      setSystemDictationGuide(true);
+      track("voice_input_started", { language, mode: "system_keyboard", guidance_only: true });
+      window.requestAnimationFrame(() => {
+        storyBodyRef.current?.focus();
+        storyBodyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      return;
+    }
     if (speechState === "listening") {
       const handle = speechRecognitionRef.current;
       speechRecognitionRef.current = null;
@@ -1022,6 +1054,8 @@ ${text}`
                   onClick={() => void toggleSpeechInput()}
                   disabled={speechState === "processing"}
                   aria-pressed={speechState === "listening"}
+                  aria-describedby={systemDictationGuide ? "system-dictation-guide" : undefined}
+                  data-voice-mode={systemDictationMode ? "system-keyboard" : "browser-speech"}
                 >
                   <Mic size={18} />
                   <span>
@@ -1033,9 +1067,13 @@ ${text}`
                         ? language === "zh"
                           ? "正在转文字…"
                           : "Transcribing…"
-                        : language === "zh"
-                          ? "语音输入"
-                          : "Voice input"}
+                        : systemDictationMode
+                          ? language === "zh"
+                            ? "使用键盘语音输入"
+                            : "Use keyboard dictation"
+                          : language === "zh"
+                            ? "语音输入到故事正文"
+                            : "Dictate to story body"}
                   </span>
                 </button>
                 <button
@@ -1078,7 +1116,19 @@ ${text}`
             </label>
             <label>
               {text.yourStory}
+              {systemDictationGuide && (
+                <span className="system-dictation-guide" id="system-dictation-guide" role="status">
+                  <b aria-hidden="true">|</b>
+                  <span>
+                    {language === "zh"
+                      ? "光标已定位到故事正文，请点击手机键盘上的麦克风开始说话。"
+                      : "The cursor is in the story body. Tap the microphone on your phone keyboard to dictate."}
+                  </span>
+                </span>
+              )}
               <textarea
+                ref={storyBodyRef}
+                data-story-body-input
                 value={draft.body}
                 maxLength={STORY_BODY_MAX_RAW_LENGTH}
                 onPaste={(e) => {
@@ -1095,9 +1145,25 @@ ${text}`
                   updateDraft({ pastedChars: draft.pastedChars + pasted.length });
                 }}
                 onFocus={() => beginFieldTiming("body")}
-                onBlur={() => endFieldTiming("body")}
+                onBlur={() => {
+                  endFieldTiming("body");
+                  if (systemDictationBaseline.current !== null) {
+                    track("voice_input_ended", { success: false, inserted_characters: 0, mode: "system_keyboard" });
+                    systemDictationBaseline.current = null;
+                  }
+                  setSystemDictationGuide(false);
+                }}
                 onChange={(e) => {
                   bodyChangeCount.current += 1;
+                  if (systemDictationBaseline.current !== null) {
+                    track("voice_input_ended", {
+                      success: true,
+                      inserted_characters: Math.max(0, e.target.value.length - systemDictationBaseline.current),
+                      mode: "system_keyboard",
+                    });
+                    systemDictationBaseline.current = null;
+                    setSystemDictationGuide(false);
+                  }
                   updateDraft({ body: e.target.value, edits: draft.edits + 1 });
                 }}
                 placeholder={draft.body ? "" : blankPrompts[language][idlePromptIndex]}
