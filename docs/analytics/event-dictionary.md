@@ -67,7 +67,7 @@
 | `story_label_editor_opened` / `story_custom_theme_added`          | 标签编辑                             | field/theme                                 | ANA-05    |
 | `image_style_selected`                                            | 风格切换                             | previous/style                              | ANA-05    |
 | `image_generation_started` / `image_generation_result`            | 图片生成                             | style、success、reused、error               | ANA-05    |
-| `image_downloaded`                                                | 下载图片                             | story、style                                | ANA-05    |
+| `image_downloaded`                                                | StoryPage 成功下载图片               | story、style、source、file_name             | ANA-05    |
 | `story_submit_result`                                             | 发布或转审核结果                     | success、status、story                      | ANA-05    |
 | `resonance_confirm_clicked`                                       | 首次共鸣页确认；不计入大厅重排漏斗   | preferences、source                         | ANA-06    |
 | `recommendation_page_viewed`                                      | 推荐页进入                           | —                                           | ANA-07    |

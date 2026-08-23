@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, Eye, LoaderCircle, MapPin, Mic, RefreshCw, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, Download, Eye, LoaderCircle, MapPin, Mic, RefreshCw, Sparkles, X } from "lucide-react";
 import { LanguageSelect, AppLogo, Pill, PrimaryButton, ThemeToggle } from "../../components/AppControls";
 import { AuthenticatedGreeting } from "../../components/AuthenticatedGreeting";
 import { uiCopy as copy } from "../../data/interface-content";
@@ -9,7 +9,7 @@ import { localizedError } from "../../lib/localized-error";
 import { track } from "../../lib/analytics";
 import { createActiveTimer, pageCanAccumulateTime } from "../../lib/analytics-timing";
 import { dataService } from "../../services/data-service";
-import { createStoryImagePreview, openStoryImageInNewTab } from "../../services/story-image";
+import { createStoryImagePreview, downloadStoryImage } from "../../services/story-image";
 import type { ImageStyle, StoryHighlight } from "../../services/story-image";
 import { formatCoords } from "../../services/place-search";
 import { startSpeechRecognition } from "../../services/speech-input";
@@ -107,6 +107,8 @@ export function StoryEditor({
     step === 3 && state.analysis?.id ? "loading" : "idle",
   );
   const [imageError, setImageError] = useState("");
+  const [imageDownloading, setImageDownloading] = useState(false);
+  const [imageDownloadError, setImageDownloadError] = useState("");
   const [publishError, setPublishError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [enabledTypeIds, setEnabledTypeIds] = useState<Set<string> | null>(null);
@@ -306,6 +308,27 @@ export function StoryEditor({
         success: false,
         error_code: error instanceof Error && "code" in error ? String(error.code) : "UNKNOWN",
       });
+    }
+  };
+  const runImageDownload = async () => {
+    if (!storyImage || imageDownloading) return;
+    setImageDownloading(true);
+    setImageDownloadError("");
+    try {
+      const fileName = await downloadStoryImage(
+        storyImage,
+        draft.title || state.analysis?.suggestedTitle || "StoryVerse story",
+      );
+      track("image_downloaded", {
+        story_id: state.analysis?.id ?? null,
+        style: imageStyle,
+        source: "story_page",
+        file_name: fileName,
+      });
+    } catch {
+      setImageDownloadError(text.imgDownloadFailed);
+    } finally {
+      setImageDownloading(false);
     }
   };
   const openStoryPage = () => {
@@ -1671,18 +1694,21 @@ ${text}`
                 <div className="comic-actions">
                   <button
                     className="download-comic"
-                    onClick={() => {
-                      track("image_downloaded", { story_id: state.analysis?.id ?? null, style: imageStyle });
-                      openStoryImageInNewTab(storyImage);
-                    }}
+                    disabled={imageDownloading}
+                    onClick={() => void runImageDownload()}
                   >
-                    <ExternalLink size={16} />
-                    {text.imgDownload}
+                    {imageDownloading ? <LoaderCircle className="comic-spinner" size={16} /> : <Download size={16} />}
+                    {imageDownloading ? text.imgDownloading : text.imgDownload}
                   </button>
                   <span className="regenerate-comic" aria-live="polite">
                     {text.imgSelected}
                   </span>
                 </div>
+              )}
+              {imageDownloadError && (
+                <p className="comic-download-error" role="status">
+                  {imageDownloadError}
+                </p>
               )}
               {storyHighlight && (
                 <details className="comic-storyboard">

@@ -70,10 +70,30 @@ export async function createStoryImagePreview(
   return dataService.createStoryImage(analysis.id, imageStyle);
 }
 
-export function openStoryImageInNewTab(imageUrl: string) {
+function storyImageFileName(title: string, mimeType: string) {
+  const baseName =
+    title
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+      .replace(/\s+/g, " ")
+      .slice(0, 80) || "storyverse-story";
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png";
+  return `${baseName}.${extension}`;
+}
+
+export async function downloadStoryImage(imageUrl: string, title: string) {
+  const response = await fetch(imageUrl, { credentials: "omit" });
+  if (!response.ok) throw new Error(`Story image download failed (${response.status})`);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = imageUrl;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.click();
+  try {
+    link.href = objectUrl;
+    link.download = storyImageFileName(title, blob.type);
+    link.rel = "noopener";
+    link.click();
+    return link.download;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

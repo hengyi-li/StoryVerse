@@ -1,22 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { reactionFeedbackCopy } from "../src/lib/reaction-feedback";
-import { openStoryImageInNewTab, preloadStoryImage, storyImageThumbnailUrl } from "../src/services/story-image";
+import { downloadStoryImage, preloadStoryImage, storyImageThumbnailUrl } from "../src/services/story-image";
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("故事图片打开方式", () => {
-  it("始终在新标签页打开，不覆盖当前故事页面", () => {
-    const anchor = { href: "", target: "", rel: "", click: vi.fn() };
+describe("故事图片下载方式", () => {
+  it("下载原图文件，不打开新标签页", async () => {
+    const anchor = { href: "", download: "", rel: "", click: vi.fn() };
     const createElement = vi.fn(() => anchor);
+    const blob = new Blob(["image"], { type: "image/jpeg" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: vi.fn().mockResolvedValue(blob) });
+    const createObjectURL = vi.fn(() => "blob:story-image");
+    const revokeObjectURL = vi.fn();
     vi.stubGlobal("document", { createElement });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
 
-    openStoryImageInNewTab("https://example.test/story.png");
+    const fileName = await downloadStoryImage("https://example.test/story.jpg", "周末的相遇:一次改变/选择");
 
+    expect(fetchMock).toHaveBeenCalledWith("https://example.test/story.jpg", { credentials: "omit" });
     expect(createElement).toHaveBeenCalledWith("a");
-    expect(anchor.href).toBe("https://example.test/story.png");
-    expect(anchor.target).toBe("_blank");
-    expect(anchor.rel).toBe("noopener noreferrer");
+    expect(anchor.href).toBe("blob:story-image");
+    expect(anchor.download).toBe("周末的相遇-一次改变-选择.jpg");
+    expect(anchor).not.toHaveProperty("target");
+    expect(anchor.rel).toBe("noopener");
     expect(anchor.click).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:story-image");
+    expect(fileName).toBe(anchor.download);
   });
 
   it("StarLobby 使用 768px 正方形缩略图，同时保留原图地址供下载", () => {

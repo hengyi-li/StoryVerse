@@ -5410,6 +5410,12 @@ textarea::placeholder {
 .comic-actions .download-comic {
   margin-top: 10px;
 }
+.comic-download-error {
+  margin: 8px 4px 0;
+  color: #ff9f9f;
+  font-size: 11px;
+  line-height: 1.5;
+}
 .regenerate-comic {
   height: 42px;
   margin-top: 10px;
