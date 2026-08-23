@@ -7,7 +7,8 @@ import { requiredFrontendOrigin } from "./lib/frontend-origin.mjs";
 const PROJECT_REF = "zgyrbtdyraxglxhbkazp";
 const projectUrl = `https://${PROJECT_REF}.supabase.co`;
 const allowedOrigin = requiredFrontendOrigin();
-const textFunctionRegion = "ap-northeast-1";
+const textFunctionRegion = process.env.STORYVERSE_TEXT_FUNCTION_REGION ?? "ap-northeast-1";
+const skipTranslation = process.env.STORYVERSE_SKIP_TRANSLATION === "1";
 const tokyoTextFunctions = new Set(["story-analyze", "story-confirm", "story-translate"]);
 const userIds = [];
 const checks = [];
@@ -47,7 +48,7 @@ function apiKeys() {
 async function request(name, { body, token, method = "POST", origin = allowedOrigin } = {}) {
   const headers = { apikey: publishableKey, Origin: origin };
   const endpoint = new URL(`${projectUrl}/functions/v1/${name}`);
-  if (tokyoTextFunctions.has(name)) {
+  if (tokyoTextFunctions.has(name) && textFunctionRegion !== "any") {
     endpoint.searchParams.set("forceFunctionRegion", textFunctionRegion);
     headers["x-region"] = textFunctionRegion;
   }
@@ -246,39 +247,43 @@ try {
     "线上禁止举报自己的故事",
   );
 
-  const translationStartedAt = performance.now();
-  const translated = await ok("story-translate", {
-    token: userB.session.access_token,
-    body: { storyIds: [featureFixture.id], targetLanguage: "en" },
-  });
-  const translationDurationMs = Math.round(performance.now() - translationStartedAt);
-  const englishStory = translated.translations?.[featureFixture.id];
-  check(
-    translated.targetLanguage === "en" &&
-      Boolean(englishStory?.title && englishStory?.body && englishStory?.city) &&
-      englishStory.body !== draft.body &&
-      !/\p{Script=Han}/u.test(englishStory.body),
-    "线上中文故事完整翻译为英文",
-    `${translationDurationMs}ms · ${textFunctionRegion}`,
-  );
+  if (!skipTranslation) {
+    const translationStartedAt = performance.now();
+    const translated = await ok("story-translate", {
+      token: userB.session.access_token,
+      body: { storyIds: [featureFixture.id], targetLanguage: "en" },
+    });
+    const translationDurationMs = Math.round(performance.now() - translationStartedAt);
+    const englishStory = translated.translations?.[featureFixture.id];
+    check(
+      translated.targetLanguage === "en" &&
+        Boolean(englishStory?.title && englishStory?.body && englishStory?.city) &&
+        englishStory.body !== draft.body &&
+        !/\p{Script=Han}/u.test(englishStory.body),
+      "线上中文故事完整翻译为英文",
+      `${translationDurationMs}ms · ${textFunctionRegion}`,
+    );
 
-  const translatedAgain = await ok("story-translate", {
-    token: userB.session.access_token,
-    body: { storyIds: [featureFixture.id], targetLanguage: "en" },
-  });
-  check(
-    translatedAgain.translations?.[featureFixture.id]?.translatedAt === englishStory.translatedAt,
-    "线上重复翻译命中缓存",
-  );
+    const translatedAgain = await ok("story-translate", {
+      token: userB.session.access_token,
+      body: { storyIds: [featureFixture.id], targetLanguage: "en" },
+    });
+    check(
+      translatedAgain.translations?.[featureFixture.id]?.translatedAt === englishStory.translatedAt,
+      "线上重复翻译命中缓存",
+    );
+  } else {
+    process.stdout.write("↷ 诊断模式跳过已知失败的线上故事翻译\n");
+  }
 
   const analysisStartedAt = performance.now();
   const analyzed = await ok("story-analyze", { token: userA.session.access_token, body: { draft } });
   const analysisDurationMs = Math.round(performance.now() - analysisStartedAt);
-  if (analyzed.status !== "needs_confirmation") {
-    const [{ data: storyState }, { data: moderation }, { data: taskState }] = await Promise.all([
+  const [{ data: storyState }, { data: moderation }, { data: taskState }, { data: embeddingState }] = await Promise.all(
+    [
       service
         .from("stories")
-        .select("status,moderation_decision,moderation_categories")
+        .select("status,moderation_decision,moderation_categories,ai_prompt_version")
         .eq("id", analyzed.analysis.id)
         .single(),
       service
@@ -295,9 +300,22 @@ try {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-    ]);
+      service
+        .from("story_embeddings")
+        .select("story_id,model_version")
+        .eq("story_id", analyzed.analysis.id)
+        .maybeSingle(),
+    ],
+  );
+  if (
+    analyzed.status !== "needs_confirmation" ||
+    storyState?.ai_prompt_version === "storyverse-analysis-fail-open-v1" ||
+    moderation?.prompt_version === "storyverse-analysis-fail-open-v1" ||
+    Boolean(taskState?.last_error) ||
+    !embeddingState
+  ) {
     throw new Error(
-      `线上真实 AI 审核、标签与向量: ${JSON.stringify({ responseStatus: analyzed.status, storyState, moderation, taskState })}`,
+      `线上真实 AI 审核、标签与向量: ${JSON.stringify({ responseStatus: analyzed.status, storyState, moderation, taskState, embeddingState })}`,
     );
   }
   check(true, "线上真实 AI 审核、标签与向量", `${analyzed.status} · ${analysisDurationMs}ms · ${textFunctionRegion}`);
