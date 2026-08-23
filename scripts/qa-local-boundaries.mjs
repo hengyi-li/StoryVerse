@@ -140,6 +140,7 @@ try {
     "recommendations-refresh",
     "reports",
     "story-analysis-worker",
+    "story-image-worker",
     "story-analyze",
     "story-confirm",
     "story-generate-image",
@@ -151,7 +152,7 @@ try {
     check(result.response.status === 405, `${name} 拒绝错误 HTTP 方法`);
     check(result.payload.code === "METHOD_NOT_ALLOWED", `${name} 方法错误结构化`);
   }
-  check(true, "20 个 Edge Function 方法边界", "全部实际请求");
+  check(true, `${functionNames.length} 个 Edge Function 方法边界`, "全部实际请求");
 
   for (const name of functionNames) {
     const result = await rawFunction(name, { method: "OPTIONS", token: null });
@@ -191,11 +192,16 @@ try {
     const result = await rawFunction(name, { body: "{}", token: null });
     check(result.response.status === 401, `${name} 无登录态拒绝访问`);
   }
-  const workerUnauthorized = await rawFunction("story-analysis-worker", { body: "{}", token: null });
-  check(
-    workerUnauthorized.response.status === 401 && workerUnauthorized.payload.code === "WORKER_TOKEN_REQUIRED",
-    "AI worker 无内部令牌拒绝访问",
-  );
+  for (const [workerName, label] of [
+    ["story-analysis-worker", "AI worker"],
+    ["story-image-worker", "图片 worker"],
+  ]) {
+    const workerUnauthorized = await rawFunction(workerName, { body: "{}", token: null });
+    check(
+      workerUnauthorized.response.status === 401 && workerUnauthorized.payload.code === "WORKER_TOKEN_REQUIRED",
+      `${label} 无内部令牌拒绝访问`,
+    );
+  }
 
   for (const [name, token] of [
     ["auth-signup", config.publishableKey],

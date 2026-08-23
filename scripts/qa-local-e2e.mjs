@@ -54,6 +54,24 @@ async function callFunction(name, body, accessToken = config.publishableKey, met
   return { payload, response };
 }
 
+async function waitForLocalImage(storyId, timeoutMs = 150_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data, error } = await service
+      .from("generated_images")
+      .select("public_url,style,status,error")
+      .eq("story_id", storyId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.status === "ready" && data.public_url) {
+      return { imageUrl: String(data.public_url), imageStyle: String(data.style) };
+    }
+    if (data?.status === "failed") throw new Error(`Background image generation failed: ${data.error}`);
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new Error(`Background image generation did not finish within ${timeoutMs}ms.`);
+}
+
 async function expectFunctionError(name, body, expectedCode, accessToken = config.publishableKey) {
   try {
     await callFunction(name, body, accessToken);
@@ -474,11 +492,17 @@ try {
     if (restoreCandidateError) throw restoreCandidateError;
     ok("图片接口输入、归属与审核状态边界");
 
-    const generatedImage = await callFunction(
+    const imageInitiationStartedAt = performance.now();
+    const imageInitiation = await callFunction(
       "story-generate-image",
       { storyId: analysis.id, style: "clay-3d" },
       tokenA,
     );
+    const imageInitiationDurationMs = Math.round(performance.now() - imageInitiationStartedAt);
+    if (imageInitiation.payload.status !== "generating" || imageInitiationDurationMs > 7_000) {
+      throw new Error(`Image request did not queue quickly (${imageInitiationDurationMs}ms).`);
+    }
+    const generatedImage = { payload: await waitForLocalImage(analysis.id) };
     if (!String(generatedImage.payload.imageUrl).includes("/storage/v1/object/public/story-images/")) {
       throw new Error("Generated image was not stored in Supabase Storage.");
     }
@@ -529,7 +553,10 @@ try {
       .eq("story_id", analysis.id);
     if (attemptError) throw attemptError;
     if (attemptCount !== 1) throw new Error(`Repeated requests triggered ${attemptCount} model attempts.`);
-    ok("Seedream 图片生成、1:1 尺寸与 Storage 保存", `${dimensions.width}×${dimensions.height}`);
+    ok(
+      "Seedream 后台图片生成、1:1 尺寸与 Storage 保存",
+      `${dimensions.width}×${dimensions.height} · 入队 ${imageInitiationDurationMs}ms`,
+    );
     ok("每篇故事只生成并选定一张图片", "重复请求与切换风格均复用原图");
 
     const editedDraft = { ...draft, title: `${draft.title}（修订）` };

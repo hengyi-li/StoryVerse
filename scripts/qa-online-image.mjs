@@ -53,6 +53,35 @@ async function invoke(name, body, accessToken, publishableKey) {
   return payload;
 }
 
+async function waitForImage(storyId, timeoutMs = 150_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data, error } = await service
+      .from("generated_images")
+      .select("public_url,style,status,highlight,prompt,error,created_at,completed_at")
+      .eq("story_id", storyId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.status === "ready" && data.public_url) {
+      return {
+        status: "ready",
+        imageUrl: String(data.public_url),
+        imageStyle: String(data.style),
+        highlight: data.highlight,
+        imagePrompt: String(data.prompt),
+        generationDurationMs: data.completed_at
+          ? new Date(data.completed_at).getTime() - new Date(data.created_at).getTime()
+          : null,
+      };
+    }
+    if (data?.status === "failed") {
+      throw new Error(`Background image generation failed: ${data.error || "Unknown error"}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new Error(`Background image generation did not finish within ${timeoutMs}ms.`);
+}
+
 const linkedProjectRef = (await readFile("supabase/.temp/project-ref", "utf8")).trim();
 if (linkedProjectRef !== PROJECT_REF) {
   throw new Error(`Refusing online QA: linked project is ${linkedProjectRef || "missing"}.`);
@@ -125,15 +154,28 @@ try {
   if (sessionError || !sessionData.session) throw sessionError ?? new Error("Could not sign in online QA user.");
   const token = sessionData.session.access_token;
   const generationStartedAt = performance.now();
-  const first = await invoke("story-generate-image", { storyId: story.id, style: "indie-zine" }, token, publishableKey);
+  const initiationStartedAt = performance.now();
+  const initiated = await invoke(
+    "story-generate-image",
+    { storyId: story.id, style: "indie-zine" },
+    token,
+    publishableKey,
+  );
+  const initiationDurationMs = Math.round(performance.now() - initiationStartedAt);
+  if (initiated.status !== "generating" || initiationDurationMs > 7_000) {
+    throw new Error(
+      `Image generation did not enter the background queue quickly: status=${initiated.status} duration=${initiationDurationMs}ms.`,
+    );
+  }
+  const first = await waitForImage(story.id);
   const totalGenerationDurationMs = Math.round(performance.now() - generationStartedAt);
   if (
     !Number.isFinite(first.generationDurationMs) ||
     first.generationDurationMs <= 0 ||
-    totalGenerationDurationMs > 90_000
+    totalGenerationDurationMs > 150_000
   ) {
     throw new Error(
-      `Online image generation exceeded the acceptance budget: provider=${first.generationDurationMs ?? "missing"}ms total=${totalGenerationDurationMs}ms.`,
+      `Online image generation exceeded the acceptance budget: background=${first.generationDurationMs ?? "missing"}ms total=${totalGenerationDurationMs}ms.`,
     );
   }
   for (const expected of [
@@ -209,7 +251,8 @@ try {
         generatedImageRows: imageCount,
         modelAttemptsAfterThreeRequests: attemptCount,
         repeatedRequestsReused: true,
-        providerDurationMs: first.generationDurationMs,
+        initiationDurationMs,
+        backgroundGenerationDurationMs: first.generationDurationMs,
         totalGenerationDurationMs,
         browserCache: cacheControl,
         requiredPromptContext: "title-location-age-gender-stage-full-body",

@@ -1,11 +1,14 @@
-import { arkModelInfo, createImageWithArk } from "../_shared/ark.ts";
+import { arkModelInfo } from "../_shared/ark.ts";
 import { sha256 } from "../_shared/crypto.ts";
 import { ApiError, json, readJson, serve } from "../_shared/http.ts";
-import { buildStoryImageFallbackPrompt, buildStoryImagePrompt } from "../_shared/image-prompt.ts";
+import { buildStoryImagePrompt } from "../_shared/image-prompt.ts";
+import { wakeStoryImageWorker } from "../_shared/story-image-worker-wakeup.ts";
 import { storyPayload } from "../_shared/story-data.ts";
 import { adminClient, requireUser } from "../_shared/supabase.ts";
 
 const styles = new Set(["clay-3d", "indie-zine", "retro-collage"]);
+
+type EdgeRuntimeApi = { waitUntil(promise: Promise<unknown>): void };
 
 type ImageClaim = {
   outcome: "claimed" | "ready" | "generating" | "rate_limited" | "stale";
@@ -18,19 +21,17 @@ type ImageClaim = {
   prompt?: string;
 };
 
-function bytesFromBase64(value: string) {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
-}
-
-function publicStorageUrl(request: Request, storagePath: string) {
-  const encodedPath = storagePath
-    .split("/")
-    .map((part) => encodeURIComponent(part))
-    .join("/");
-  const configuredUrl = Deno.env.get("STORYVERSE_PUBLIC_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL");
-  const requestOrigin = new URL(request.url).origin;
-  const publicOrigin = configuredUrl && !configuredUrl.includes("//kong:") ? configuredUrl : requestOrigin;
-  return `${publicOrigin.replace(/\/$/, "")}/storage/v1/object/public/story-images/${encodedPath}`;
+function wakeImageWorkerInBackground() {
+  const task = wakeStoryImageWorker().catch((error) => {
+    console.error(
+      JSON.stringify({
+        event: "story_image_worker_wakeup_failed",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  });
+  const edgeRuntime = (globalThis as typeof globalThis & { EdgeRuntime?: EdgeRuntimeApi }).EdgeRuntime;
+  if (edgeRuntime) edgeRuntime.waitUntil(task);
 }
 
 serve(async (request) => {
@@ -46,8 +47,9 @@ serve(async (request) => {
     .eq("user_id", user.id)
     .single();
   if (storyError || !story) throw new ApiError(404, "STORY_NOT_FOUND", "没有找到这篇故事。");
-  if (story.moderation_decision !== "pass")
+  if (story.moderation_decision !== "pass") {
     throw new ApiError(409, "IMAGE_BLOCKED", "这篇故事正在等待内容确认，确认完成后即可生成图片。");
+  }
 
   const sentence =
     String(story.body)
@@ -62,7 +64,6 @@ serve(async (request) => {
     emotion: story.mood,
   };
   const prompt = buildStoryImagePrompt(story);
-  const fallbackPrompt = buildStoryImageFallbackPrompt(story);
   const imageSourceHash = await sha256(`${story.content_hash}\u0000${prompt}`);
   const model = arkModelInfo().image;
   let claim: ImageClaim | null = null;
@@ -86,6 +87,7 @@ serve(async (request) => {
   if (!claim) throw new Error("Could not claim image generation.");
   if (claim.outcome === "ready") {
     return json(request, {
+      status: "ready",
       imageUrl: claim.imageUrl,
       imageStyle: claim.style,
       highlight: claim.highlight,
@@ -94,84 +96,62 @@ serve(async (request) => {
       story: storyPayload({ ...story, visual_status: "ready", image_url: claim.imageUrl }),
     });
   }
-  if (claim.outcome === "generating") {
-    throw new ApiError(409, "IMAGE_GENERATING", "这篇故事的图片正在生成，请稍后查看。");
-  }
   if (claim.outcome === "rate_limited") {
     throw new ApiError(429, "IMAGE_RATE_LIMIT", "每小时最多生成 5 张图片，请稍后再试。");
+  }
+  if (claim.outcome === "generating") {
+    wakeImageWorkerInBackground();
+    return json(
+      request,
+      {
+        status: "generating",
+        queued: true,
+        retryAfterMs: 2_500,
+        imageStyle: input.style,
+        highlight,
+        imagePrompt: prompt,
+        story: storyPayload({ ...story, visual_status: "generating" }),
+      },
+      202,
+    );
   }
   if (claim.outcome !== "claimed" || !claim.imageId || !claim.attemptId) {
     throw new Error("Image generation claim returned an invalid result.");
   }
 
-  const imageId = claim.imageId;
-  const attemptId = claim.attemptId;
-  let uploadedStoragePath: string | null = null;
-
-  try {
-    const generated = await createImageWithArk({ prompt, fallbackPrompt, style: input.style });
-    const actualPrompt = generated.usedFallback ? fallbackPrompt : prompt;
-    let bytes: Uint8Array;
-    let contentType = "image/png";
-    if (generated.kind === "url") {
-      const response = await fetch(generated.value);
-      if (!response.ok) throw new Error(`Could not download generated image (${response.status})`);
-      bytes = new Uint8Array(await response.arrayBuffer());
-      contentType = response.headers.get("content-type")?.split(";")[0] || contentType;
-    } else {
-      bytes = bytesFromBase64(generated.value);
-    }
-    const extension = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : "png";
-    const storagePath = `${user.id}/${story.id}/${imageId}.${extension}`;
-    const { error: uploadError } = await admin.storage.from("story-images").upload(storagePath, bytes, {
-      contentType,
-      cacheControl: "31536000",
-      upsert: false,
+  const { error: queueError } = await admin.rpc("queue_story_image_job", {
+    p_story_id: story.id,
+    p_image_id: claim.imageId,
+    p_attempt_id: claim.attemptId,
+  });
+  if (queueError) {
+    const completedAt = new Date().toISOString();
+    await admin.rpc("fail_story_image_job", {
+      p_story_id: story.id,
+      p_image_id: claim.imageId,
+      p_attempt_id: claim.attemptId,
+      p_error: queueError.message,
+      p_completed_at: completedAt,
     });
-    if (uploadError) throw uploadError;
-    uploadedStoragePath = storagePath;
-    const imageUrl = publicStorageUrl(request, storagePath);
-    const { error: imageUpdateError } = await admin
-      .from("generated_images")
-      .update({
-        status: "ready",
-        prompt: actualPrompt,
-        storage_path: storagePath,
-        public_url: imageUrl,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", imageId);
-    if (imageUpdateError) throw imageUpdateError;
-    const { error: storyUpdateError } = await admin
-      .from("stories")
-      .update({ visual_status: "ready" })
-      .eq("id", story.id);
-    if (storyUpdateError) throw storyUpdateError;
-    const { error: attemptUpdateError } = await admin
-      .from("image_generation_attempts")
-      .update({ status: "succeeded", completed_at: new Date().toISOString() })
-      .eq("id", attemptId);
-    if (attemptUpdateError) throw attemptUpdateError;
-    return json(request, {
-      imageUrl,
+    throw queueError;
+  }
+  const { error: storyVisualError } = await admin
+    .from("stories")
+    .update({ visual_status: "generating" })
+    .eq("id", story.id);
+  if (storyVisualError) throw storyVisualError;
+  wakeImageWorkerInBackground();
+  return json(
+    request,
+    {
+      status: "generating",
+      queued: true,
+      retryAfterMs: 2_500,
       imageStyle: input.style,
       highlight,
       imagePrompt: prompt,
-      generationDurationMs: generated.durationMs,
-      story: storyPayload({ ...story, visual_status: "ready", image_url: imageUrl }),
-    });
-  } catch (error) {
-    if (uploadedStoragePath) await admin.storage.from("story-images").remove([uploadedStoragePath]);
-    const errorMessage = error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000);
-    await admin
-      .from("generated_images")
-      .update({ status: "failed", error: errorMessage, storage_path: null, public_url: null })
-      .eq("id", imageId);
-    await admin
-      .from("image_generation_attempts")
-      .update({ status: "failed", error: errorMessage, completed_at: new Date().toISOString() })
-      .eq("id", attemptId);
-    await admin.from("stories").update({ visual_status: "failed" }).eq("id", story.id);
-    throw error;
-  }
+      story: storyPayload({ ...story, visual_status: "generating" }),
+    },
+    202,
+  );
 });

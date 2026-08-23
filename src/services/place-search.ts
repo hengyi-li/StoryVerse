@@ -51,6 +51,16 @@ function searchLocal(query: string, limit: number): PlaceSuggestion[] {
     .map((item) => toSuggestion(item.city));
 }
 
+function hasExactLocalMatch(query: string) {
+  const normalized = query.trim().toLowerCase();
+  return cities.some(
+    (city) =>
+      city.name.toLowerCase() === normalized ||
+      city.nameEn.toLowerCase() === normalized ||
+      city.aliases.some((alias) => alias.toLowerCase() === normalized),
+  );
+}
+
 /**
  * 城市联想 = 本地城市库 + 服务端 Open-Meteo 全球地点搜索。
  * 外部服务不可用时安静退回本地结果，输入框不会因此卡住。
@@ -59,6 +69,9 @@ export async function searchPlaces(query: string, limit = 8): Promise<PlaceSugge
   const q = query.trim();
   const local = searchLocal(q, limit);
   if (!q) return local;
+  // An exact local hit is already authoritative and should never be delayed
+  // by an optional network lookup.
+  if (hasExactLocalMatch(q)) return local;
 
   const cached = cache.get(q);
   if (cached) return cached;

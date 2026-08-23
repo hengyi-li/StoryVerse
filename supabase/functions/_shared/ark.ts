@@ -362,14 +362,19 @@ const stylePrompt: Record<string, string> = {
   "retro-collage": "复古拼贴风格，撕纸层次，粉彩纸张纹理，温暖的编辑感",
 };
 
-export async function createImageWithArk(input: { prompt: string; style: string; fallbackPrompt?: string }) {
+export async function createImageWithArk(input: {
+  prompt: string;
+  style: string;
+  fallbackPrompt?: string;
+  timeoutMs?: number;
+}) {
   const startedAt = performance.now();
   const requestImage = async (prompt: string) => {
     const completePrompt = `为一篇真实人生故事创作一张克制、尊重人物、无文字的正方形 1:1 插画。${stylePrompt[input.style] ?? stylePrompt["clay-3d"]}。${prompt}`;
     return arkFetch(
       ARK_IMAGE_GENERATION_PATH,
       createArkImageGenerationRequest(requiredModel("ARK_IMAGE_MODEL"), completePrompt),
-      STORY_IMAGE_TIMEOUT_MS,
+      input.timeoutMs ?? STORY_IMAGE_TIMEOUT_MS,
     );
   };
   let payload: Awaited<ReturnType<typeof requestImage>>;

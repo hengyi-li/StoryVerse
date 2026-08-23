@@ -46,6 +46,17 @@ export type StoryProgress = {
   status: StoryStatus;
 };
 
+export type StoryImageGeneration = {
+  status: "queued" | "generating" | "ready" | "failed";
+  imageUrl?: string;
+  imageStyle?: string;
+  highlight?: { title: string; moment: string; scene: string; action: string; emotion: string };
+  imagePrompt?: string;
+  error?: string;
+  reused?: boolean;
+  retryAfterMs?: number;
+};
+
 const resumableStoryStatuses: StoryStatus[] = ["analyzing", "pending_review", "needs_confirmation"];
 
 const emotionLabels: Record<string, { value: string; zh: string; en: string }> = {
@@ -671,24 +682,24 @@ export const dataService = {
   markNotificationsRead: (ids?: string[]) => invoke("notifications", ids ? { ids } : { all: true }),
 
   createStoryImage: (storyId: string, style: string) =>
-    invoke<{
-      imageUrl: string;
-      imageStyle: string;
-      highlight: { title: string; moment: string; scene: string; action: string; emotion: string };
-      imagePrompt: string;
-      reused?: boolean;
-    }>("story-generate-image", { storyId, style }),
+    invoke<StoryImageGeneration>("story-generate-image", { storyId, style }),
 
-  getStoryImage: async (storyId: string) => {
+  getStoryImageGeneration: async (storyId: string): Promise<StoryImageGeneration> => {
     const { data, error } = await supabase
       .from("generated_images")
-      .select("public_url,style,status,highlight,prompt")
+      .select("public_url,style,status,highlight,prompt,error")
       .eq("story_id", storyId)
-      .eq("status", "ready")
       .maybeSingle();
     if (error) throw new DataServiceError(error.message, "STORY_IMAGE_UNAVAILABLE");
-    if (!data?.public_url || !String(data.prompt ?? "").startsWith("STORYVERSE_IMAGE_PROMPT_V2")) return null;
+    if (!data) return { status: "queued" };
+    const status = String(data.status);
+    if (status === "generating" || status === "queued") return { status };
+    if (status === "failed") return { status: "failed", error: String(data.error ?? "") };
+    if (!data.public_url || !String(data.prompt ?? "").startsWith("STORYVERSE_IMAGE_PROMPT_V2")) {
+      return { status: "failed", error: "The selected image is no longer compatible with this story." };
+    }
     return {
+      status: "ready",
       imageUrl: String(data.public_url),
       imageStyle: String(data.style),
       highlight: data.highlight as {
@@ -698,8 +709,14 @@ export const dataService = {
         action: string;
         emotion: string;
       },
-      imagePrompt: String(data.prompt ?? ""),
+      imagePrompt: String(data.prompt),
+      reused: true,
     };
+  },
+
+  getStoryImage: async (storyId: string) => {
+    const image = await dataService.getStoryImageGeneration(storyId);
+    return image.status === "ready" ? image : null;
   },
 
   getAdminDashboard: () => invoke<AdminDashboard>("admin-api", { action: "dashboard" }),

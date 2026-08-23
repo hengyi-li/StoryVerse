@@ -445,6 +445,9 @@ verify_jwt = false
 [functions.story-generate-image]
 verify_jwt = false
 
+[functions.story-image-worker]
+verify_jwt = false
+
 [functions.story-save-draft]
 verify_jwt = false
 

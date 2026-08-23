@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(78);
+select plan(88);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'stories', 'stories table exists');
@@ -15,6 +15,12 @@ select has_table('public', 'story_translations', 'story translation cache exists
 select has_table('public', 'pretest_responses', 'pre-study response table exists');
 select has_table('public', 'posttest_responses', 'post-study response table exists');
 select has_column('public', 'profiles', 'pretest_required', 'profiles carry the pre-study requirement gate');
+select has_column(
+  'public',
+  'generated_images',
+  'active_attempt_id',
+  'generated images identify the only active background attempt'
+);
 select policies_are(
   'public',
   'pretest_responses',
@@ -328,6 +334,59 @@ select is(
   'the first image request claims the only image slot'
 );
 select is(
+  (select active_attempt_id::text from public.generated_images
+    where story_id = '10000000-0000-0000-0000-000000000000'),
+  (select result ->> 'attemptId' from first_image_claim),
+  'the image row points to the attempt allowed to publish its result'
+);
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table first_image_job as
+select public.queue_story_image_job(
+  '10000000-0000-0000-0000-000000000000',
+  (result ->> 'imageId')::uuid,
+  (result ->> 'attemptId')::uuid
+) as msg_id
+from first_image_claim;
+select ok((select msg_id > 0 from first_image_job), 'the claimed image is added to the durable queue');
+
+create temporary table claimed_image_job as
+select * from public.claim_story_image_job();
+select is(
+  (select message ->> 'story_id' from claimed_image_job),
+  '10000000-0000-0000-0000-000000000000',
+  'the worker claims the queued story identifier'
+);
+select is(
+  (select (message ->> 'retry_count')::integer from claimed_image_job),
+  0,
+  'a new image job starts without a retry'
+);
+
+create temporary table retried_image_job as
+select public.retry_story_image_job(
+  (select msg_id from claimed_image_job),
+  jsonb_set((select message from claimed_image_job), '{retry_count}', '1'::jsonb),
+  0
+) as msg_id;
+select isnt(
+  (select msg_id from retried_image_job),
+  (select msg_id from claimed_image_job),
+  'a retry archives the old delivery and creates a new durable message'
+);
+create temporary table claimed_retried_image_job as
+select * from public.claim_story_image_job();
+select is(
+  (select (message ->> 'retry_count')::integer from claimed_retried_image_job),
+  1,
+  'the worker can claim the automatic retry with its retry count preserved'
+);
+select ok(
+  public.archive_story_image_job((select msg_id from claimed_retried_image_job)),
+  'a completed image job is archived exactly once'
+);
+select set_config('request.jwt.claim.role', '', true);
+select is(
   (public.claim_story_image_generation(
     '10000000-0000-0000-0000-000000000000',
     '00000000-0000-0000-0000-000000000999',
@@ -336,11 +395,20 @@ select is(
   'generating',
   'a concurrent image request does not claim a second generation'
 );
-
-update public.generated_images
-set status = 'ready', public_url = 'https://example.invalid/image.png', storage_path = 'test/image.png'
-where story_id = '10000000-0000-0000-0000-000000000000';
-
+select set_config('request.jwt.claim.role', 'service_role', true);
+select ok(
+  public.complete_story_image_job(
+    '10000000-0000-0000-0000-000000000000',
+    (select (result ->> 'imageId')::uuid from first_image_claim),
+    (select (result ->> 'attemptId')::uuid from first_image_claim),
+    'test prompt',
+    'test/image.png',
+    'https://example.invalid/image.png',
+    now()
+  ),
+  'image, attempt and story success state are committed together'
+);
+select set_config('request.jwt.claim.role', '', true);
 select is(
   (public.claim_story_image_generation(
     '10000000-0000-0000-0000-000000000000',
@@ -370,8 +438,23 @@ select throws_ok(
 );
 
 update public.generated_images
-set status = 'failed', storage_path = null, public_url = null
+set status = 'generating', storage_path = null, public_url = null
 where story_id = '10000000-0000-0000-0000-000000000000';
+update public.image_generation_attempts
+set status = 'started', completed_at = null
+where id = (select (result ->> 'attemptId')::uuid from first_image_claim);
+select set_config('request.jwt.claim.role', 'service_role', true);
+select ok(
+  public.fail_story_image_job(
+    '10000000-0000-0000-0000-000000000000',
+    (select (result ->> 'imageId')::uuid from first_image_claim),
+    (select (result ->> 'attemptId')::uuid from first_image_claim),
+    'test failure',
+    now()
+  ),
+  'image, attempt and story failure state are committed together'
+);
+select set_config('request.jwt.claim.role', '', true);
 insert into public.image_generation_attempts (story_id, user_id, style, status)
 select
   '10000000-0000-0000-0000-000000000000',

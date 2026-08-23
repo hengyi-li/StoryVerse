@@ -126,6 +126,7 @@ export function StoryEditor({
   const lastSnapshotKey = useRef("");
   const confirmationBodyAtOpen = useRef("");
   const analysisRequestedByUser = useRef(false);
+  const trackedReadyImage = useRef("");
 
   const pauseWritingTimers = () => {
     titleTimer.current.pause();
@@ -170,17 +171,30 @@ export function StoryEditor({
     setImageError("");
     setImageStatus("loading");
     dataService
-      .getStoryImage(state.analysis.id)
+      .getStoryImageGeneration(state.analysis.id)
       .then((image) => {
         if (cancelled) return;
-        if (!image) {
+        if (image.status === "queued") {
           setImageStatus("idle");
           return;
         }
-        setImageStyle(image.imageStyle as ImageStyle);
-        setStoryImage(image.imageUrl);
-        setStoryHighlight(image.highlight);
-        setImageStatus("ready");
+        if (image.status === "generating") {
+          setImageStatus("generating");
+          return;
+        }
+        if (image.status === "failed") {
+          setImageStatus("failed");
+          setImageError(
+            language === "zh" ? "这次没有完成图片，可以重新尝试。" : "The image was not completed. You can try again.",
+          );
+          return;
+        }
+        if (image.imageUrl && image.imageStyle && image.highlight) {
+          setImageStyle(image.imageStyle as ImageStyle);
+          setStoryImage(image.imageUrl);
+          setStoryHighlight(image.highlight);
+          setImageStatus("ready");
+        }
       })
       .catch(() => {
         if (!cancelled) setImageStatus("idle");
@@ -188,7 +202,60 @@ export function StoryEditor({
     return () => {
       cancelled = true;
     };
-  }, [step, state.analysis?.id]);
+  }, [step, state.analysis?.id, language]);
+
+  useEffect(() => {
+    const storyId = state.analysis?.id;
+    if (step !== 3 || !storyId || imageStatus !== "generating") return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      try {
+        const image = await dataService.getStoryImageGeneration(storyId);
+        if (cancelled) return;
+        if (image.status === "ready" && image.imageUrl && image.imageStyle && image.highlight) {
+          setImageStyle(image.imageStyle as ImageStyle);
+          setStoryImage(image.imageUrl);
+          setStoryHighlight(image.highlight);
+          setImageStatus("ready");
+          setImageError("");
+          if (trackedReadyImage.current !== storyId) {
+            trackedReadyImage.current = storyId;
+            track("image_generation_result", {
+              story_id: storyId,
+              style: image.imageStyle,
+              success: true,
+              reused: false,
+              asynchronous: true,
+            });
+          }
+          return;
+        }
+        if (image.status === "failed") {
+          setImageStatus("failed");
+          setImageError(
+            language === "zh" ? "这次没有完成图片，可以重新尝试。" : "The image was not completed. You can try again.",
+          );
+          track("image_generation_result", {
+            story_id: storyId,
+            style: imageStyle,
+            success: false,
+            error_code: "BACKGROUND_IMAGE_FAILED",
+            asynchronous: true,
+          });
+          return;
+        }
+        timer = window.setTimeout(poll, 2_500);
+      } catch {
+        if (!cancelled) timer = window.setTimeout(poll, 5_000);
+      }
+    };
+    timer = window.setTimeout(poll, 1_000);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [step, state.analysis?.id, imageStatus, imageStyle, language]);
 
   const updateDraft = (patch: Partial<StoryDraft>) => {
     const metadataFields = ["mood", "stage", "age", "gender", "city", "people"] as const;
@@ -208,16 +275,23 @@ export function StoryEditor({
     setImageError("");
     try {
       const result = await createStoryImagePreview(draft, state.analysis, imageStyle, Object.values(tagDrafts).flat());
-      setImageStyle(result.imageStyle as ImageStyle);
-      setStoryImage(result.imageUrl);
-      setStoryHighlight(result.highlight);
-      setImageStatus("ready");
-      track("image_generation_result", {
-        story_id: state.analysis.id ?? null,
-        style: result.imageStyle,
-        success: true,
-        reused: result.reused ?? false,
-      });
+      if (result.status === "ready" && result.imageUrl && result.imageStyle && result.highlight) {
+        setImageStyle(result.imageStyle as ImageStyle);
+        setStoryImage(result.imageUrl);
+        setStoryHighlight(result.highlight);
+        setImageStatus("ready");
+        track("image_generation_result", {
+          story_id: state.analysis.id ?? null,
+          style: result.imageStyle,
+          success: true,
+          reused: result.reused ?? false,
+        });
+      } else if (result.status === "generating") {
+        setImageStyle((result.imageStyle as ImageStyle | undefined) ?? imageStyle);
+        setImageStatus("generating");
+      } else {
+        throw new Error("Image generation did not start.");
+      }
     } catch (error) {
       setImageStatus("failed");
       setImageError(
@@ -1559,8 +1633,8 @@ ${text}`
                         : (() => {
                             const o = imageStyleOptions.find((x) => x.id === imageStyle);
                             return language === "zh"
-                              ? `正在结合故事信息和正文选择一个真实瞬间，并准备一张${o?.label}插画`
-                              : `Using the story details and writing to prepare a ${o?.labelEn} illustration`;
+                              ? `正在后台准备一张${o?.label}插画；你可以先发布，完成后再回来查看。`
+                              : `Preparing a ${o?.labelEn} illustration in the background. You may publish now and return later.`;
                           })()}
                     </small>
                   </div>
