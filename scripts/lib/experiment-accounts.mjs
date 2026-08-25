@@ -6,6 +6,7 @@ export const experimentAccountCodes = [
 ];
 
 const readableAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+const EXPERIMENT_PASSWORD_LENGTH = 10;
 
 export function resonanceExperimentCondition(accountIdentifier) {
   const account = String(accountIdentifier ?? "").trim();
@@ -24,8 +25,18 @@ function uniqueReadableSecrets(count, length) {
   return [...secrets];
 }
 
+export function generateNumericPassword() {
+  return String(randomInt(10 ** (EXPERIMENT_PASSWORD_LENGTH - 1), 10 ** EXPERIMENT_PASSWORD_LENGTH));
+}
+
+export function createExperimentPasswords(count = experimentAccountCodes.length) {
+  const passwords = new Set();
+  while (passwords.size < count) passwords.add(generateNumericPassword());
+  return [...passwords];
+}
+
 export function createExperimentCredentials() {
-  const passwords = uniqueReadableSecrets(experimentAccountCodes.length, 16);
+  const passwords = createExperimentPasswords();
   const securityAnswers = uniqueReadableSecrets(experimentAccountCodes.length, 20);
   return experimentAccountCodes.map((account, index) => ({
     account,
