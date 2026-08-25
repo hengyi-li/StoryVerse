@@ -463,6 +463,8 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   list-style: none;
   border: 1px solid rgba(24, 49, 62, 0.16);
   border-radius: 14px;
@@ -479,6 +481,7 @@
   padding: 11px 12px;
   border-radius: 10px;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .pretest-select-menu li.is-active {

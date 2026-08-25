@@ -46,7 +46,11 @@ async function dashboard(admin: ReturnType<typeof adminClient>) {
       .select("id,username,display_name,anonymous_number,role,status,created_at")
       .order("created_at", { ascending: false })
       .limit(200),
-    admin.from("stories").select("*").order("created_at", { ascending: false }).limit(200),
+    admin
+      .from("stories")
+      .select("*,author:profiles!stories_user_id_fkey(username,display_name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
     admin.from("ai_tasks").select("*").order("created_at", { ascending: false }).limit(200),
     admin
       .from("feedback")

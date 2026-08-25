@@ -52,6 +52,12 @@ import {
   type BilingualOption,
 } from "../pretest/pretest-options.generated";
 import { posttestItemIds, posttestSections } from "../posttest/posttest-content";
+import {
+  adminStoryAuthor,
+  adminStoryStatuses,
+  filterAndSortAdminStories,
+  type AdminStoryFilters,
+} from "./admin-story-management";
 import "./admin.css";
 
 type AdminView =
@@ -280,6 +286,16 @@ const emptyDashboard: AdminDashboard = {
   analytics: {},
 };
 
+const defaultStoryFilters: AdminStoryFilters = {
+  query: "",
+  username: "",
+  status: "",
+  publishedFrom: "",
+  publishedTo: "",
+  sortKey: "published_at",
+  sortDirection: "desc",
+};
+
 function rowObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
@@ -391,6 +407,7 @@ export function AdminConsole({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [query, setQuery] = useState("");
+  const [storyFilters, setStoryFilters] = useState<AdminStoryFilters>(defaultStoryFilters);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -460,11 +477,16 @@ export function AdminConsole({
         .toLocaleLowerCase()
         .includes(normalizedQuery),
     );
+  const visibleStories = useMemo(
+    () => filterAndSortAdminStories(dashboard.stories, storyFilters),
+    [dashboard.stories, storyFilters],
+  );
 
   const changeView = (next: AdminView) => {
     setView(next);
     setSelectedId(null);
     setQuery("");
+    setStoryFilters(defaultStoryFilters);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -526,9 +548,9 @@ export function AdminConsole({
 
   const definition = viewDefinitions[view];
   const CurrentIcon = definition.icon;
-  const searchBox = !(["analytics", "pretest", "posttest", "types", "algorithm", "imports"] as AdminView[]).includes(
-    view,
-  ) && (
+  const searchBox = !(
+    ["stories", "analytics", "pretest", "posttest", "types", "algorithm", "imports"] as AdminView[]
+  ).includes(view) && (
     <label className="admin-search-box">
       <Search size={17} aria-hidden="true" />
       <input
@@ -883,14 +905,31 @@ export function AdminConsole({
             {!(["overview", "reviews"] as AdminView[]).includes(view) && !loading && (
               <section className="admin-management">
                 {searchBox}
+                {view === "stories" && (
+                  <StoryManagementToolbar
+                    filters={storyFilters}
+                    onChange={setStoryFilters}
+                    shownCount={visibleStories.length}
+                    totalCount={dashboard.stories.length}
+                    zh={zh}
+                  />
+                )}
                 {view === "accounts" &&
                   dashboard.users
                     .filter((row) => matches([row.username, row.display_name]))
                     .map((row) => <AccountRow key={String(row.id)} row={row} zh={zh} run={run} />)}
                 {view === "stories" &&
-                  dashboard.stories
-                    .filter((row) => matches([row.title, row.body, row.city]))
-                    .map((row) => <StoryRow key={String(row.id)} row={row} zh={zh} run={run} />)}
+                  (visibleStories.length ? (
+                    visibleStories.map((row) => <StoryRow key={String(row.id)} row={row} zh={zh} run={run} />)
+                  ) : (
+                    <div className="admin-panel">
+                      <Empty
+                        icon={Search}
+                        title={zh ? "没有符合条件的故事" : "No matching stories"}
+                        body={zh ? "请调整账号、日期或状态筛选条件。" : "Adjust the account, date or status filters."}
+                      />
+                    </div>
+                  ))}
                 {view === "tasks" &&
                   dashboard.tasks
                     .filter((row) => matches([row.task_type, row.status, row.last_error]))
@@ -1055,7 +1094,139 @@ function AccountRow({ row, zh, run }: { row: Record<string, unknown>; zh: boolea
   );
 }
 
+function StoryManagementToolbar({
+  filters,
+  onChange,
+  shownCount,
+  totalCount,
+  zh,
+}: {
+  filters: AdminStoryFilters;
+  onChange: (filters: AdminStoryFilters) => void;
+  shownCount: number;
+  totalCount: number;
+  zh: boolean;
+}) {
+  const set = <Key extends keyof AdminStoryFilters>(key: Key, value: AdminStoryFilters[Key]) =>
+    onChange({ ...filters, [key]: value });
+  const hasFilters = Boolean(
+    filters.query || filters.username || filters.status || filters.publishedFrom || filters.publishedTo,
+  );
+
+  return (
+    <section className="admin-story-toolbar" aria-label={zh ? "故事筛选与排序" : "Story filters and sorting"}>
+      <div className="admin-story-toolbar-head">
+        <div>
+          <Filter size={17} aria-hidden="true" />
+          <span>
+            {zh ? `显示 ${shownCount} / ${totalCount} 条故事` : `Showing ${shownCount} of ${totalCount} stories`}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="admin-text-action"
+          disabled={!hasFilters}
+          onClick={() => onChange(defaultStoryFilters)}
+        >
+          {zh ? "清除筛选" : "Clear filters"}
+        </button>
+      </div>
+      <div className="admin-story-filter-grid">
+        <label className="admin-story-filter is-wide">
+          <span>{zh ? "搜索故事" : "Search stories"}</span>
+          <div>
+            <Search size={15} aria-hidden="true" />
+            <input
+              value={filters.query}
+              aria-label={zh ? "搜索故事" : "Search stories"}
+              onChange={(event) => set("query", event.target.value)}
+              placeholder={zh ? "标题、正文、城市或昵称" : "Title, body, city or display name"}
+            />
+          </div>
+        </label>
+        <label className="admin-story-filter">
+          <span>{zh ? "登录账号" : "Username"}</span>
+          <div>
+            <UserRound size={15} aria-hidden="true" />
+            <input
+              value={filters.username}
+              aria-label={zh ? "登录账号" : "Username"}
+              onChange={(event) => set("username", event.target.value)}
+              placeholder={zh ? "输入账号，不含或包含 @ 均可" : "Enter username, with or without @"}
+            />
+          </div>
+        </label>
+        <label className="admin-story-filter">
+          <span>{zh ? "故事状态" : "Story status"}</span>
+          <select
+            value={filters.status}
+            aria-label={zh ? "故事状态" : "Story status"}
+            onChange={(event) => set("status", event.target.value)}
+          >
+            <option value="">{zh ? "全部状态" : "All statuses"}</option>
+            {adminStoryStatuses.map((status) => (
+              <option key={status} value={status}>
+                {displayStatus(status, zh)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-story-filter">
+          <span>{zh ? "发布开始日期" : "Published from"}</span>
+          <input
+            type="date"
+            value={filters.publishedFrom}
+            aria-label={zh ? "发布开始日期" : "Published from"}
+            max={filters.publishedTo || undefined}
+            onChange={(event) => set("publishedFrom", event.target.value)}
+          />
+        </label>
+        <label className="admin-story-filter">
+          <span>{zh ? "发布结束日期" : "Published to"}</span>
+          <input
+            type="date"
+            value={filters.publishedTo}
+            aria-label={zh ? "发布结束日期" : "Published to"}
+            min={filters.publishedFrom || undefined}
+            onChange={(event) => set("publishedTo", event.target.value)}
+          />
+        </label>
+        <label className="admin-story-filter">
+          <span>{zh ? "排序字段" : "Sort by"}</span>
+          <select
+            value={filters.sortKey}
+            aria-label={zh ? "排序字段" : "Sort by"}
+            onChange={(event) => set("sortKey", event.target.value as AdminStoryFilters["sortKey"])}
+          >
+            <option value="published_at">{zh ? "发布时间" : "Published time"}</option>
+            <option value="username">{zh ? "登录账号" : "Username"}</option>
+            <option value="status">{zh ? "故事状态" : "Story status"}</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          className="admin-story-sort-direction"
+          aria-label={zh ? "切换排序方向" : "Toggle sort direction"}
+          onClick={() => set("sortDirection", filters.sortDirection === "asc" ? "desc" : "asc")}
+        >
+          {filters.sortDirection === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+          <span>{filters.sortDirection === "asc" ? (zh ? "升序" : "Ascending") : zh ? "降序" : "Descending"}</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function StoryRow({ row, zh, run }: { row: Record<string, unknown>; zh: boolean; run: RunFunction }) {
+  const author = adminStoryAuthor(row);
+  const publicationLabel = row.published_at
+    ? `${zh ? "发布于" : "Published"} ${new Intl.DateTimeFormat(zh ? "zh-CN" : "en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(String(row.published_at)))}`
+    : zh
+      ? "尚未发布"
+      : "Not published";
   return (
     <article className="admin-data-row is-story">
       <div className="admin-row-primary">
@@ -1064,9 +1235,14 @@ function StoryRow({ row, zh, run }: { row: Record<string, unknown>; zh: boolean;
         </span>
         <div>
           <b>{String(row.title || row.ai_suggested_title || (zh ? "未命名故事" : "Untitled story"))}</b>
+          <span className="admin-story-author">
+            @{author.username || (zh ? "账号未知" : "unknown")} ·{" "}
+            {author.displayName || (zh ? "未设置昵称" : "No display name")}
+          </span>
           <span>
             {String(row.city || (zh ? "城市未知" : "Unknown city"))} ·{" "}
-            {row.source_kind === "seed" ? (zh ? "冷启动故事" : "Seed story") : zh ? "用户故事" : "User story"}
+            {row.source_kind === "seed" ? (zh ? "冷启动故事" : "Seed story") : zh ? "用户故事" : "User story"} ·{" "}
+            {publicationLabel}
           </span>
           <small>{String(row.body).slice(0, 120)}</small>
         </div>

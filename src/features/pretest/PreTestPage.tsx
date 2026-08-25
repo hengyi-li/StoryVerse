@@ -104,6 +104,16 @@ function Select({
   const listboxId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const pointerGestureRef = useRef<{
+    pointerId: number;
+    pointerType: string;
+    startX: number;
+    startY: number;
+    optionIndex: number;
+    moved: boolean;
+  } | null>(null);
+  const ignoreNextClickRef = useRef(false);
+  const ignoreClickTimerRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const selectedIndex = options.findIndex((option) => option.value === String(value ?? ""));
   const [activeIndex, setActiveIndex] = useState(Math.max(0, selectedIndex));
@@ -130,6 +140,13 @@ function Select({
       ?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, open]);
 
+  useEffect(
+    () => () => {
+      if (ignoreClickTimerRef.current !== null) window.clearTimeout(ignoreClickTimerRef.current);
+    },
+    [],
+  );
+
   const choose = (index: number) => {
     const option = options[index];
     if (!option) return;
@@ -141,6 +158,50 @@ function Select({
   const openWithIndex = (index: number) => {
     setActiveIndex(Math.min(Math.max(index, 0), Math.max(options.length - 1, 0)));
     setOpen(true);
+  };
+
+  const ignoreSyntheticTouchClick = () => {
+    ignoreNextClickRef.current = true;
+    if (ignoreClickTimerRef.current !== null) window.clearTimeout(ignoreClickTimerRef.current);
+    ignoreClickTimerRef.current = window.setTimeout(() => {
+      ignoreNextClickRef.current = false;
+      ignoreClickTimerRef.current = null;
+    }, 500);
+  };
+
+  const optionIndexFromTarget = (target: EventTarget | null) => {
+    const option = target instanceof Element ? target.closest<HTMLElement>("[data-option-index]") : null;
+    const index = Number(option?.dataset.optionIndex);
+    return Number.isInteger(index) ? index : -1;
+  };
+
+  const handleMenuPointerDown = (event: React.PointerEvent<HTMLUListElement>) => {
+    if (event.pointerType === "mouse") return;
+    const optionIndex = optionIndexFromTarget(event.target);
+    if (optionIndex < 0) return;
+    pointerGestureRef.current = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startY: event.clientY,
+      optionIndex,
+      moved: false,
+    };
+  };
+
+  const handleMenuPointerMove = (event: React.PointerEvent<HTMLUListElement>) => {
+    const gesture = pointerGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >= 10) gesture.moved = true;
+  };
+
+  const finishTouchGesture = (event: React.PointerEvent<HTMLUListElement>, cancelled = false) => {
+    const gesture = pointerGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    pointerGestureRef.current = null;
+    ignoreSyntheticTouchClick();
+    const releasedOptionIndex = optionIndexFromTarget(event.target);
+    if (!cancelled && !gesture.moved && releasedOptionIndex === gesture.optionIndex) choose(gesture.optionIndex);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -206,7 +267,16 @@ function Select({
         <span className="pretest-select-chevron" aria-hidden="true" />
       </button>
       {open && (
-        <ul id={listboxId} className="pretest-select-menu" role="listbox" aria-label={placeholder}>
+        <ul
+          id={listboxId}
+          className="pretest-select-menu"
+          role="listbox"
+          aria-label={placeholder}
+          onPointerDown={handleMenuPointerDown}
+          onPointerMove={handleMenuPointerMove}
+          onPointerUp={(event) => finishTouchGesture(event)}
+          onPointerCancel={(event) => finishTouchGesture(event, true)}
+        >
           {options.map((option, index) => (
             <li
               id={`${listboxId}-option-${index}`}
@@ -216,9 +286,17 @@ function Select({
               className={`${activeIndex === index ? "is-active" : ""} ${selectedIndex === index ? "is-selected" : ""}`}
               data-option-index={index}
               data-option-value={option.value}
-              onPointerMove={() => setActiveIndex(index)}
-              onPointerDown={(event) => {
+              onPointerMove={(event) => {
+                if (event.pointerType === "mouse") setActiveIndex(index);
+              }}
+              onClick={(event) => {
+                // Field is a label for accessible naming. Prevent its default
+                // activation from clicking the trigger and reopening the menu.
                 event.preventDefault();
+                if (ignoreNextClickRef.current) {
+                  ignoreNextClickRef.current = false;
+                  return;
+                }
                 choose(index);
               }}
             >

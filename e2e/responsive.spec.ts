@@ -10,6 +10,82 @@ import {
   type TestAccount,
 } from "./support/storyverse-fixture";
 
+async function verifyTouchSelect(page: import("@playwright/test").Page, field: string, targetValue?: string) {
+  const root = page.locator(`[data-field="${field}"]`);
+  const trigger = root.locator(".pretest-select-trigger");
+  const before = await trigger.innerText();
+  await trigger.evaluate((node: HTMLButtonElement) => node.click());
+  const menu = root.locator(".pretest-select-menu");
+  await expect(menu).toBeVisible();
+  expect(await menu.evaluate((node) => getComputedStyle(node).touchAction)).toBe("pan-y");
+
+  const canScroll = await menu.evaluate((node) => node.scrollHeight > node.clientHeight + 1);
+  if (canScroll) {
+    await menu.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await menu.hover();
+    await page.mouse.wheel(0, 180);
+    await expect.poll(() => menu.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    await menu.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+  }
+
+  const gestureOption = menu.locator("[data-option-value]").first();
+  await gestureOption.dispatchEvent("pointerdown", {
+    bubbles: true,
+    pointerId: 71,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: 180,
+    clientY: 540,
+  });
+  await gestureOption.dispatchEvent("pointermove", {
+    bubbles: true,
+    pointerId: 71,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: 180,
+    clientY: 450,
+  });
+  await gestureOption.dispatchEvent("pointerup", {
+    bubbles: true,
+    pointerId: 71,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: 180,
+    clientY: 450,
+  });
+  await expect(menu).toBeVisible();
+  expect(await trigger.innerText()).toBe(before);
+
+  const target = targetValue
+    ? menu.locator(`[data-option-value="${targetValue}"]`)
+    : menu.locator("[data-option-value]").first();
+  const selectedValue = await target.getAttribute("data-option-value");
+  if (!selectedValue) throw new Error(`No selectable option found for ${field}`);
+  await target.dispatchEvent("pointerdown", {
+    bubbles: true,
+    pointerId: 72,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: 180,
+    clientY: 500,
+  });
+  await target.dispatchEvent("pointerup", {
+    bubbles: true,
+    pointerId: 72,
+    pointerType: "touch",
+    isPrimary: true,
+    clientX: 180,
+    clientY: 500,
+  });
+  await expect(menu).toBeHidden();
+  await expect.poll(() => trigger.innerText()).not.toBe(before);
+  return selectedValue;
+}
+
 test.describe("移动端、深路由与基础可访问性", () => {
   const accounts: TestAccount[] = [];
   test.afterEach(async ({ page }) => {
@@ -130,6 +206,41 @@ test.describe("移动端、深路由与基础可访问性", () => {
     await expect(body).toBeFocused();
     await expect(page.locator("#system-dictation-guide")).toBeVisible();
     await expect(page.getByLabel(/^标题/)).not.toBeFocused();
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test("安卓式触摸下所有前测下拉框都能滚动且不会误选", async ({ page }) => {
+    test.setTimeout(120_000);
+    const account = await createAccount({ displayName: "全下拉触摸 E2E" });
+    accounts.push(account);
+    await loginThroughUi(page, account);
+    await expect(page).toHaveURL(/\/PreTest$/);
+
+    await page.getByRole("button", { name: /同意 \/ Agree/ }).click();
+    await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
+    await verifyTouchSelect(page, "birthYear", "1995");
+    await verifyTouchSelect(page, "gender", "female");
+    await verifyTouchSelect(page, "residenceRegion", "china_mainland");
+    await verifyTouchSelect(page, "province", "he_bei_sheng");
+    await verifyTouchSelect(page, "city", "shi_jia_zhuang_shi");
+    await verifyTouchSelect(page, "communityType", "residents_committee");
+    await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
+    await expect(page.getByText("03 / 04")).toBeVisible();
+
+    await verifyTouchSelect(page, "ethnicity", "han_zu");
+    await verifyTouchSelect(page, "education", "bachelor");
+    await page.getByRole("button", { name: /继续 \/ Continue/ }).click();
+    await expect(page.getByText("04 / 04")).toBeVisible();
+
+    await verifyTouchSelect(page, "employment", "full_time");
+    await verifyTouchSelect(page, "industryPrimary");
+    await verifyTouchSelect(page, "industrySecondary");
+    await verifyTouchSelect(page, "employment", "student_unpaid");
+    await expect(page.locator('[data-field="industryPrimary"]')).toHaveCount(0);
+    await verifyTouchSelect(page, "discipline");
+    await verifyTouchSelect(page, "major");
+    await page.getByRole("button", { name: /提交并开始|Submit & begin/ }).click();
+    await expect(page).toHaveURL(/\/StoryStart$/);
     await expectNoHorizontalOverflow(page);
   });
 });
