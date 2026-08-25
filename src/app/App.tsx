@@ -9,12 +9,14 @@ import {
   externalPath,
   guardBlankEditorAfterSubmission,
   guardPostPublishScreenForFirstStory,
+  guardResonanceScreenForExperiment,
   isStoryEditorRoute,
   normalizedPath,
   pathFromState,
   pickStoryForDirectStoryPage,
   routePatchFromPath,
   safeDirectStoryEditorStep,
+  screenAfterPublishedStory,
   shouldAutosaveDraft,
   storyEditorStepForProgress,
 } from "./routes";
@@ -232,10 +234,14 @@ export default function App() {
                 })
               : previous.screen;
           const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(requestedScreen, hasSubmittedStory);
+          const experimentGuardedScreen = guardResonanceScreenForExperiment(
+            firstStoryGuardedScreen,
+            currentUser.resonanceExperimentCondition,
+          );
           const screen = shouldOpenProgress
             ? "storyEditor"
             : guardBlankEditorAfterSubmission({
-                screen: firstStoryGuardedScreen,
+                screen: experimentGuardedScreen,
                 hasSubmittedStory,
                 hasDraftContent: Boolean(savedDraft?.title.trim() || savedDraft?.body.trim()),
                 hasStoryProgress: Boolean(storyProgress),
@@ -436,8 +442,12 @@ export default function App() {
       }
     }
     const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(state.screen, state.hasCompletedFirstStory);
+    const experimentGuardedScreen = guardResonanceScreenForExperiment(
+      firstStoryGuardedScreen,
+      user.resonanceExperimentCondition,
+    );
     const guardedScreen = guardBlankEditorAfterSubmission({
-      screen: firstStoryGuardedScreen,
+      screen: experimentGuardedScreen,
       hasSubmittedStory: state.hasCompletedFirstStory,
       hasDraftContent: Boolean(state.draft.title.trim() || state.draft.body.trim()),
       hasStoryProgress: Boolean(state.analysis),
@@ -460,7 +470,14 @@ export default function App() {
     posttestProgress?.required,
     posttestProgress?.status,
     posttestLoadError,
+    user?.resonanceExperimentCondition,
   ]);
+  const refreshLobbyStories = async () => {
+    await dataService.refreshRecommendations();
+    const items = await dataService.listLobbyStories();
+    setLocalStories(items.map((item) => item.story));
+    return items;
+  };
   const enterStarLobby = () => {
     setDirectStoryRoute(false);
     if (!user) {
@@ -472,11 +489,9 @@ export default function App() {
       return;
     }
     update({ screen: "starLobby" });
-    void dataService
-      .refreshRecommendations()
-      .then(() => dataService.listLobbyStories())
-      .then((items) => setLocalStories(items.map((item) => item.story)))
-      .catch((error) => console.info("[StoryVerse] Recommendations could not be refreshed.", error));
+    void refreshLobbyStories().catch((error) =>
+      console.info("[StoryVerse] Recommendations could not be refreshed.", error),
+    );
   };
   const continueAfterPendingReview = async (storyId: string) => {
     setOwnedStoryIds((previous) => (previous.includes(storyId) ? previous : [storyId, ...previous]));
@@ -529,12 +544,18 @@ export default function App() {
     setOwnedStoryIds((previous) => [story.id, ...previous]);
     const inbox = await dataService.listNotifications().catch(() => state.inbox);
     await clearRecoveryDraft().catch(() => undefined);
+    const nextScreen = screenAfterPublishedStory(user?.resonanceExperimentCondition ?? null);
     update({
       hasCompletedFirstStory: true,
-      screen: "resonance",
+      screen: nextScreen,
       analysis: { ...analysis, id: story.id, workflowStatus: result.status },
       inbox,
     });
+    if (nextScreen === "starLobby") {
+      void refreshLobbyStories().catch((error) =>
+        console.info("[StoryVerse] Fixed-condition recommendations could not be refreshed.", error),
+      );
+    }
     track("story_submit_result", { story_id: story.id, success: true, status: result.status });
   };
   const completeAuth = async (input: GatewayAuthInput) => {
@@ -919,7 +940,7 @@ export default function App() {
         onTourSkip={skipTour}
       />
     );
-  else if (state.screen === "resonance")
+  else if (state.screen === "resonance" && !user?.resonanceExperimentCondition)
     content = (
       <ResonancePage
         state={state}
@@ -985,17 +1006,20 @@ export default function App() {
           });
         }}
         resonance={state.resonance}
-        onResonanceChange={async (resonance) => {
-          await dataService.saveResonancePreferences(resonance);
-          await dataService.refreshRecommendations();
-          const items = await dataService.listLobbyStories();
-          setLocalStories(items.map((item) => item.story));
-          update({ resonance });
-          return {
-            batchId: items.find((item) => item.story.recommendationBatchId)?.story.recommendationBatchId,
-            storyCount: items.length,
-          };
-        }}
+        resonanceLocked={Boolean(user?.resonanceExperimentCondition)}
+        onResonanceChange={
+          user?.resonanceExperimentCondition
+            ? undefined
+            : async (resonance) => {
+                await dataService.saveResonancePreferences(resonance);
+                const items = await refreshLobbyStories();
+                update({ resonance });
+                return {
+                  batchId: items.find((item) => item.story.recommendationBatchId)?.story.recommendationBatchId,
+                  storyCount: items.length,
+                };
+              }
+        }
         stories={localStories}
         ownedStoryIds={ownedStoryIds}
         reactions={state.reactions}

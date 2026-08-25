@@ -1,4 +1,5 @@
 import type { AppState, ScreenId, Story, StoryEditorStep, StoryStatus } from "../types/domain";
+import type { ResonanceExperimentCondition } from "../lib/resonance-experiment";
 import type { AuthMode, GatewaySection } from "../types/ui";
 
 const routeMap = {
@@ -87,6 +88,17 @@ export function authenticatedEntryScreen({
 export function guardPostPublishScreenForFirstStory(screen: ScreenId, hasPublishedStory: boolean): ScreenId {
   const requiresPublishedStory: ScreenId[] = ["posttest", "resonance", "recommendations", "starLobby"];
   return requiresPublishedStory.includes(screen) && !hasPublishedStory ? "storyEditor" : screen;
+}
+
+export function guardResonanceScreenForExperiment(
+  screen: ScreenId,
+  condition: ResonanceExperimentCondition | null,
+): ScreenId {
+  return screen === "resonance" && condition ? "starLobby" : screen;
+}
+
+export function screenAfterPublishedStory(condition: ResonanceExperimentCondition | null): ScreenId {
+  return condition ? "starLobby" : "resonance";
 }
 
 /** 数据库中仍需用户查看的故事状态，对应应该恢复到的编辑器步骤。 */

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(90);
+select plan(103);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'stories', 'stories table exists');
@@ -15,6 +15,12 @@ select has_table('public', 'story_translations', 'story translation cache exists
 select has_table('public', 'pretest_responses', 'pre-study response table exists');
 select has_table('public', 'posttest_responses', 'post-study response table exists');
 select has_column('public', 'profiles', 'pretest_required', 'profiles carry the pre-study requirement gate');
+select has_function(
+  'public',
+  'resonance_experiment_condition',
+  array['text'],
+  'the database exposes one canonical account-prefix classifier'
+);
 select has_column(
   'public',
   'generated_images',
@@ -71,16 +77,66 @@ select policies_are('public', 'stories', array['stories_read'], 'stories expose 
 select policies_are('public', 'account_credentials', array[]::text[], 'security answers have no user-facing policies');
 select policies_are('public', 'admin_audit_logs', array['audit_admin'], 'audit records are admin-only');
 select policies_are('public', 'story_translations', array['story_translations_read'], 'story translations have one read policy');
+select policies_are(
+  'public',
+  'resonance_preferences',
+  array['resonance_owner_delete', 'resonance_owner_insert', 'resonance_owner_read', 'resonance_owner_update'],
+  'fixed participants can read preferences while ordinary owners retain explicit mutation policies'
+);
+
+select is(public.resonance_experiment_condition('AISA01'), 'all_similar', 'uppercase AISA numeric accounts are similar');
+select is(public.resonance_experiment_condition('aisa21'), 'all_similar', 'lowercase AISA numeric accounts are similar');
+select is(public.resonance_experiment_condition('AISB01'), 'all_different', 'uppercase AISB numeric accounts are different');
+select is(public.resonance_experiment_condition('aisb100'), 'all_different', 'lowercase AISB numeric accounts are different');
+select is(public.resonance_experiment_condition('AISA'), null::text, 'the bare AISA prefix is an ordinary account');
+select is(public.resonance_experiment_condition('AISA_TEST'), null::text, 'non-numeric AISA suffixes remain ordinary');
+select is(public.resonance_experiment_condition('MYAISA01'), null::text, 'embedded experiment prefixes remain ordinary');
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-000000000998'),
   ('00000000-0000-0000-0000-000000000999'),
-  ('00000000-0000-0000-0000-000000000997');
+  ('00000000-0000-0000-0000-000000000997'),
+  ('00000000-0000-0000-0000-000000000996'),
+  ('00000000-0000-0000-0000-000000000995');
 
 insert into public.profiles (id, username, display_name, anonymous_number) values
   ('00000000-0000-0000-0000-000000000999', 'reference_user', '参照用户', 999),
   ('00000000-0000-0000-0000-000000000998', 'candidate_user', '候选用户', 998),
-  ('00000000-0000-0000-0000-000000000997', 'private_user', '私密用户', 997);
+  ('00000000-0000-0000-0000-000000000997', 'private_user', '私密用户', 997),
+  ('00000000-0000-0000-0000-000000000996', 'AISA01', '相同实验用户', 996),
+  ('00000000-0000-0000-0000-000000000995', 'aisb01', '相异实验用户', 995);
+
+select is(
+  (select count(*)::integer from public.resonance_preferences
+    where user_id = '00000000-0000-0000-0000-000000000996'
+      and city_mode = 'similar' and stage_mode = 'similar' and theme_mode = 'similar'),
+  1,
+  'creating an AISA profile immediately creates three similar preferences'
+);
+select is(
+  (select count(*)::integer from public.resonance_preferences
+    where user_id = '00000000-0000-0000-0000-000000000995'
+      and city_mode = 'different' and stage_mode = 'different' and theme_mode = 'different'),
+  1,
+  'creating an AISB profile immediately creates three different preferences'
+);
+select is(
+  (select count(*)::integer from public.resonance_preferences
+    where user_id = '00000000-0000-0000-0000-000000000999'),
+  0,
+  'creating an ordinary profile does not force a preference row'
+);
+
+update public.resonance_preferences
+set city_mode = 'different', stage_mode = 'different', theme_mode = 'different'
+where user_id = '00000000-0000-0000-0000-000000000996';
+select is(
+  (select count(*)::integer from public.resonance_preferences
+    where user_id = '00000000-0000-0000-0000-000000000996'
+      and city_mode = 'similar' and stage_mode = 'similar' and theme_mode = 'similar'),
+  1,
+  'the database trigger restores forged AISA preference updates'
+);
 
 select is(
   (select pretest_required from public.profiles where id = '00000000-0000-0000-0000-000000000999'),

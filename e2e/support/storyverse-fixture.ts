@@ -13,6 +13,13 @@ export const service = createClient(supabaseUrl, secretKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+export function authenticatedService(account: TestAccount) {
+  return createClient(supabaseUrl, publishableKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${account.accessToken}` } },
+  });
+}
+
 export type TestAccount = {
   id: string;
   username: string;
@@ -205,6 +212,12 @@ export async function seedLobby(account: TestAccount) {
     .single();
   if (configError || !config || !ownStory || !seedStory)
     throw configError ?? new Error("E2E recommendation fixture failed");
+  const { data: preference, error: preferenceError } = await service
+    .from("resonance_preferences")
+    .select("city_mode,stage_mode,theme_mode")
+    .eq("user_id", account.id)
+    .maybeSingle();
+  if (preferenceError) throw preferenceError;
   const { data: batch, error: batchError } = await service
     .from("recommendation_batches")
     .insert({
@@ -212,9 +225,9 @@ export async function seedLobby(account: TestAccount) {
       reference_story_id: ownStory.id,
       algorithm_config_id: config.id,
       formula_version: "e2e-recommendation-v1",
-      city_mode: "similar",
-      stage_mode: "different",
-      theme_mode: "similar",
+      city_mode: preference?.city_mode ?? "similar",
+      stage_mode: preference?.stage_mode ?? "different",
+      theme_mode: preference?.theme_mode ?? "similar",
     })
     .select("id")
     .single();

@@ -3,12 +3,14 @@ import {
   authenticatedEntryScreen,
   guardBlankEditorAfterSubmission,
   guardPostPublishScreenForFirstStory,
+  guardResonanceScreenForExperiment,
   isStoryEditorRoute,
   pickStoryForDirectStoryPage,
   safeDirectStoryEditorStep,
   shouldAutosaveDraft,
   storyEditorStepForProgress,
   routePatchFromPath,
+  screenAfterPublishedStory,
 } from "../src/app/routes";
 
 describe("新用户进入路径", () => {
@@ -53,6 +55,14 @@ describe("新用户进入路径", () => {
     expect(guardPostPublishScreenForFirstStory("resonance", false)).toBe("storyEditor");
     expect(guardPostPublishScreenForFirstStory("recommendations", false)).toBe("storyEditor");
     expect(guardPostPublishScreenForFirstStory("storyEditor", false)).toBe("storyEditor");
+  });
+
+  it("固定实验账号发布后跳过共鸣页，普通账号仍保留原流程", () => {
+    expect(screenAfterPublishedStory("all_similar")).toBe("starLobby");
+    expect(screenAfterPublishedStory("all_different")).toBe("starLobby");
+    expect(screenAfterPublishedStory(null)).toBe("resonance");
+    expect(guardResonanceScreenForExperiment("resonance", "all_similar")).toBe("starLobby");
+    expect(guardResonanceScreenForExperiment("resonance", null)).toBe("resonance");
   });
 
   it("从数据库恢复 AI 处理中、待确认和待人工审核的故事步骤", () => {

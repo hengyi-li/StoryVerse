@@ -37,6 +37,7 @@
     "qa:online-analytics-journey": "node scripts/qa-online-analytics-journey.mjs",
     "qa:moderation": "node scripts/qa-local-moderation.mjs",
     "qa:review-release": "node scripts/qa-local-review-release.mjs",
+    "accounts:experiment": "node scripts/provision-experiment-accounts.mjs",
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env.local",
     "types:generate": "supabase gen types typescript --local > src/types/database.generated.ts"
   },

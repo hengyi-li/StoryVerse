@@ -1,5 +1,6 @@
 import { ApiError, isAllowedOrigin, json, readJson, serve } from "../_shared/http.ts";
 import { adminClient } from "../_shared/supabase.ts";
+import { analyticsConditionId } from "../_shared/resonance-experiment.ts";
 
 type AnalyticsPriority = "P0" | "P1" | "P2";
 
@@ -176,6 +177,7 @@ serve(async (request) => {
   const authorization = request.headers.get("authorization") ?? "";
   const accessToken = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
   let userId: string | null = null;
+  let authenticatedConditionId: string | null = null;
   if (accessToken) {
     const { data } = await admin.auth.getUser(accessToken);
     userId = data.user?.id ?? null;
@@ -183,12 +185,13 @@ serve(async (request) => {
   if (userId) {
     const { data: profile, error } = await admin
       .from("profiles")
-      .select("role,status,pretest_required")
+      .select("username,role,status,pretest_required")
       .eq("id", userId)
       .maybeSingle();
     if (error || !profile || profile.status !== "active")
       throw new ApiError(403, "ACCOUNT_UNAVAILABLE", "账号当前不可用。");
     if (profile.role === "admin") return json(request, { accepted: 0, skipped: events.length });
+    authenticatedConditionId = analyticsConditionId(profile.username);
     if (profile.pretest_required) {
       const { data: pretest, error: pretestError } = await admin
         .from("pretest_responses")
@@ -278,7 +281,7 @@ serve(async (request) => {
       browser: stringValue(event.browser, 80, "unknown"),
       os: stringValue(event.os, 80, "unknown"),
       study_id: stringValue(event.study_id, 80, "storyverse_lab_v1"),
-      condition_id: stringValue(event.condition_id, 80, "default"),
+      condition_id: authenticatedConditionId ?? stringValue(event.condition_id, 80, "default"),
       app_version: stringValue(event.app_version, 120, "development"),
       environment: ["local", "preview", "production", "test"].includes(String(event.environment))
         ? String(event.environment)

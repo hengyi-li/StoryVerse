@@ -24,6 +24,15 @@ describe("analytics event contract", () => {
     for (const eventName of analyticsEventNames) expect(source).toContain(`${eventName}:`);
   });
 
+  it("derives authenticated resonance conditions from the server-side account prefix", () => {
+    const source = readFileSync("supabase/functions/analytics-track/index.ts", "utf8");
+    const classifier = readFileSync("supabase/functions/_shared/resonance-experiment.ts", "utf8");
+    expect(source).toContain("authenticatedConditionId ??");
+    expect(source).toContain("analyticsConditionId(profile.username)");
+    expect(classifier).toContain('return "resonance_all_similar"');
+    expect(classifier).toContain('return "resonance_all_different"');
+  });
+
   it("does not permit legacy priority labels in the analytics implementation", () => {
     const sources = [
       readFileSync("src/lib/analytics-events.ts", "utf8"),

@@ -2,34 +2,34 @@
 
 ## 1. 公共参数
 
-| 参数                      | 类型                  | 生成方            | 说明                                         |
-| ------------------------- | --------------------- | ----------------- | -------------------------------------------- |
-| `event_id`                | UUID                  | 客户端            | 幂等键；重试不改变                           |
-| `event_name`              | string                | 客户端/服务端校验 | 小写 snake_case                              |
-| `event_version`           | integer               | 客户端/服务端固定 | 当前为 1                                     |
-| `priority`                | P0/P1/P2              | 服务端            | 服务端按事件字典覆盖客户端值                 |
-| `occurred_at`             | ISO time              | 客户端            | 实际发生时间，允许与服务器相差不超过 7 天    |
-| `received_at`             | ISO time              | 服务端            | 入库时间                                     |
-| `user_id`                 | UUID/null             | 服务端            | 从 JWT 解析；账号删除后置空                  |
-| `participant_key`         | hex                   | 服务端            | HMAC(user ID 或 anonymous ID)，不可逆        |
-| `anonymous_id`            | UUID                  | localStorage      | 同一浏览器长期稳定                           |
-| `session_id`              | UUID                  | sessionStorage    | 新标签页或闲置 30 分钟后更新                 |
-| `page_view_id`            | UUID                  | 客户端            | 每次进入语义页面更新                         |
-| `lobby_view_id`           | UUID/null             | 客户端            | 进入大厅或共鸣刷新成功后更新                 |
-| `recommendation_batch_id` | UUID/null             | 服务端推荐结果    | 当前推荐批次                                 |
-| `page_id`                 | string                | App               | `home_intro`、`icebreaker`、`story_write` 等 |
-| `route`                   | string                | 浏览器            | pathname + search，不含域名                  |
-| `component`               | string/null           | 事件              | 可选语义组件名                               |
-| `language`                | zh/en                 | App               | 事件发生时语言                               |
-| `theme`                   | day/night             | App               | 事件发生时主题                               |
-| `device_type`             | desktop/tablet/mobile | 客户端            | `<768`、`768–1099`、`≥1100`                  |
-| `viewport`                | object                | 客户端            | 宽、高和 pixel ratio                         |
-| `browser` / `os`          | string                | User-Agent 解析   | 粗粒度环境信息                               |
-| `study_id`                | string                | 环境配置          | 默认 `storyverse_lab_v1`                     |
-| `condition_id`            | string                | 环境配置          | 默认 `default`                               |
-| `app_version`             | string                | 构建配置          | Git 短 SHA                                   |
-| `environment`             | enum                  | 客户端            | local/preview/production/test                |
-| `properties`              | JSON object           | 事件              | 私有参数                                     |
+| 参数                      | 类型                  | 生成方            | 说明                                                                 |
+| ------------------------- | --------------------- | ----------------- | -------------------------------------------------------------------- |
+| `event_id`                | UUID                  | 客户端            | 幂等键；重试不改变                                                   |
+| `event_name`              | string                | 客户端/服务端校验 | 小写 snake_case                                                      |
+| `event_version`           | integer               | 客户端/服务端固定 | 当前为 1                                                             |
+| `priority`                | P0/P1/P2              | 服务端            | 服务端按事件字典覆盖客户端值                                         |
+| `occurred_at`             | ISO time              | 客户端            | 实际发生时间，允许与服务器相差不超过 7 天                            |
+| `received_at`             | ISO time              | 服务端            | 入库时间                                                             |
+| `user_id`                 | UUID/null             | 服务端            | 从 JWT 解析；账号删除后置空                                          |
+| `participant_key`         | hex                   | 服务端            | HMAC(user ID 或 anonymous ID)，不可逆                                |
+| `anonymous_id`            | UUID                  | localStorage      | 同一浏览器长期稳定                                                   |
+| `session_id`              | UUID                  | sessionStorage    | 新标签页或闲置 30 分钟后更新                                         |
+| `page_view_id`            | UUID                  | 客户端            | 每次进入语义页面更新                                                 |
+| `lobby_view_id`           | UUID/null             | 客户端            | 进入大厅或共鸣刷新成功后更新                                         |
+| `recommendation_batch_id` | UUID/null             | 服务端推荐结果    | 当前推荐批次                                                         |
+| `page_id`                 | string                | App               | `home_intro`、`icebreaker`、`story_write` 等                         |
+| `route`                   | string                | 浏览器            | pathname + search，不含域名                                          |
+| `component`               | string/null           | 事件              | 可选语义组件名                                                       |
+| `language`                | zh/en                 | App               | 事件发生时语言                                                       |
+| `theme`                   | day/night             | App               | 事件发生时主题                                                       |
+| `device_type`             | desktop/tablet/mobile | 客户端            | `<768`、`768–1099`、`≥1100`                                          |
+| `viewport`                | object                | 客户端            | 宽、高和 pixel ratio                                                 |
+| `browser` / `os`          | string                | User-Agent 解析   | 粗粒度环境信息                                                       |
+| `study_id`                | string                | 环境配置          | 默认 `storyverse_lab_v1`                                             |
+| `condition_id`            | string                | 服务端/环境配置   | AISA/AISB 登录态事件由服务端覆盖为固定实验组；其他账号默认 `default` |
+| `app_version`             | string                | 构建配置          | Git 短 SHA                                                           |
+| `environment`             | enum                  | 客户端            | local/preview/production/test                                        |
+| `properties`              | JSON object           | 事件              | 私有参数                                                             |
 
 ## 2. 核心私有参数
 

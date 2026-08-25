@@ -1205,14 +1205,17 @@ function FloatingMenu({
   activeView,
   language,
   onChange,
+  resonanceLocked,
 }: {
   activeView: ViewMode;
   language: Language;
   onChange: (view: NavigationItemId) => void;
+  resonanceLocked: boolean;
 }) {
+  const visibleItems = resonanceLocked ? navItems.filter((item) => item.id !== "resonance") : navItems;
   return (
     <nav aria-label="StoryVerse star map navigation" className="floating-nav">
-      {navItems.map((item) => (
+      {visibleItems.map((item) => (
         <button
           key={item.id}
           data-tour={`nav-${item.id}`}
@@ -1769,6 +1772,7 @@ export function StarLobby({
   onHome,
   onLogout,
   resonance = defaultResonance,
+  resonanceLocked = false,
   onResonanceChange,
   stories = [],
   ownedStoryIds = [],
@@ -1798,6 +1802,7 @@ export function StarLobby({
   onHome: () => void;
   onLogout?: () => void;
   resonance?: ResonancePreferences;
+  resonanceLocked?: boolean;
   onResonanceChange?: (
     resonance: ResonancePreferences,
   ) => Promise<{ batchId?: string; storyCount?: number } | void> | { batchId?: string; storyCount?: number } | void;
@@ -2189,12 +2194,17 @@ export function StarLobby({
     setDraftResonance(resonance);
   }, [resonance]);
 
+  useEffect(() => {
+    if (resonanceLocked && activeView === "resonance") setActiveView("explore");
+  }, [activeView, resonanceLocked]);
+
   const handleWheel = (event: React.WheelEvent<HTMLElement>) => {
     gestureCounts.current.wheel += 1;
     gestureCounts.current.zoom += 1;
     setZoom((current) => Math.max(0, Math.min(1, current + (event.deltaY < 0 ? 0.12 : -0.12))));
   };
   const handleViewChange = (view: NavigationItemId) => {
+    if (resonanceLocked && view === "resonance") return;
     track("lobby_nav_clicked", { previous_view: activeView, view, changed: activeView !== view });
     selectNode(null, "view_changed");
     if (view === "resonance") {
@@ -2363,7 +2373,7 @@ export function StarLobby({
           translationFailed={selectedNode.sourceLanguage !== language && translationFailedIds.includes(selectedNode.id)}
         />
       )}
-      {activeView === "resonance" && (
+      {!resonanceLocked && activeView === "resonance" && (
         <ResonanceBar
           language={language}
           value={draftResonance}
@@ -2392,7 +2402,12 @@ export function StarLobby({
         onMarkInboxRead={() => onMarkInboxRead?.()}
         onDisplayNameChange={onDisplayNameChange}
       />
-      <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
+      <FloatingMenu
+        activeView={activeView}
+        language={language}
+        onChange={handleViewChange}
+        resonanceLocked={resonanceLocked}
+      />
       {showPosttestReminder && (
         <PosttestReminder
           onDismiss={() => {

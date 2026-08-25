@@ -22,6 +22,7 @@ import type {
   StoryTranslation,
   UserProfile,
 } from "../types/domain";
+import { resonanceExperimentCondition } from "../lib/resonance-experiment";
 
 export class DataServiceError extends Error {
   constructor(
@@ -141,14 +142,16 @@ async function invoke<T>(name: string, body?: unknown, method: "GET" | "POST" = 
 }
 
 function profileFromRow(row: Record<string, unknown>): UserProfile {
+  const accountIdentifier = String(row.username ?? "");
   return {
     id: String(row.id),
-    accountIdentifier: String(row.username ?? ""),
+    accountIdentifier,
     displayName: String(row.display_name ?? "StoryVerse"),
     anonymousNumber: Number(row.anonymous_number ?? 404),
     role: row.role === "admin" ? "admin" : "user",
     status: row.status === "suspended" ? "suspended" : "active",
     pretestRequired: Boolean(row.pretest_required),
+    resonanceExperimentCondition: resonanceExperimentCondition(accountIdentifier),
   };
 }
 
@@ -428,7 +431,10 @@ export const dataService = {
     feedback?: string;
   }) => {
     const { user } = await dataService.getCurrentUser();
-    if (input.accountIdentifier && input.accountIdentifier.trim().toLowerCase() !== user.accountIdentifier) {
+    if (
+      input.accountIdentifier &&
+      input.accountIdentifier.trim().toLowerCase() !== user.accountIdentifier.toLowerCase()
+    ) {
       throw new DataServiceError("登录账号创建后不能直接修改。", "USERNAME_IMMUTABLE");
     }
     if (input.displayName?.trim()) {

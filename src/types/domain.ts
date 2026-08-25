@@ -265,6 +265,7 @@ export interface UserProfile {
   role: "user" | "admin";
   status: "active" | "suspended";
   pretestRequired: boolean;
+  resonanceExperimentCondition: "all_similar" | "all_different" | null;
 }
 
 export interface AppState {
