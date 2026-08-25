@@ -40,7 +40,7 @@ describe("火山方舟图片生成", () => {
   });
 
   it("限制用户等待的 AI 长尾，同时保留 2K 单图质量", () => {
-    expect(STORY_ANALYSIS_TIMEOUT_MS).toBe(30_000);
+    expect(STORY_ANALYSIS_TIMEOUT_MS).toBe(45_000);
     expect(STORY_ANALYSIS_MAX_TOKENS).toBe(1_200);
     expect(STORY_IMAGE_TIMEOUT_MS).toBe(90_000);
   });

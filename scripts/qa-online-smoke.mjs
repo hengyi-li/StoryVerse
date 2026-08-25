@@ -368,15 +368,24 @@ try {
   check(Array.isArray(recommendations.recommendations), "线上推荐批次结构稳定");
   const lobby = await ok("lobby-stories", { token: userA.session.access_token, method: "GET" });
   check(Array.isArray(lobby.recommendations) && lobby.recommendations.length > 0, "线上星空大厅返回真实故事");
-  check(
-    lobby.recommendations.every(
+  const storiesWithoutCoordinates = lobby.recommendations
+    .filter(
       (item) =>
-        item.story?.latitude != null &&
-        item.story?.longitude != null &&
-        Number.isFinite(Number(item.story.latitude)) &&
-        Number.isFinite(Number(item.story.longitude)),
-    ),
+        item.story?.latitude == null ||
+        item.story?.longitude == null ||
+        !Number.isFinite(Number(item.story.latitude)) ||
+        !Number.isFinite(Number(item.story.longitude)),
+    )
+    .map((item) => ({
+      id: item.story?.id ?? null,
+      city: item.story?.city ?? null,
+      latitude: item.story?.latitude ?? null,
+      longitude: item.story?.longitude ?? null,
+    }));
+  check(
+    storiesWithoutCoordinates.length === 0,
     "线上星空大厅故事保留真实经纬度",
+    storiesWithoutCoordinates.length ? JSON.stringify(storiesWithoutCoordinates.slice(0, 5)) : "",
   );
   const notices = await ok("notifications", { token: userA.session.access_token, method: "GET" });
   check(Array.isArray(notices.notifications), "线上通知接口结构稳定");

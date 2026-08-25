@@ -1,14 +1,13 @@
 import { FunctionRegion } from "@supabase/supabase-js";
 
 /**
- * Text and embedding responses are small, so running these Ark-backed
- * functions in Tokyo avoids the unstable Singapore -> Beijing model route
- * without adding meaningful database transfer overhead.
+ * Text and embedding responses are small, so route Ark-backed text functions
+ * through Tokyo. Production verification on 2026-08-26 showed that automatic
+ * and Singapore routing had severe long-tail failures, while the core story
+ * analysis completed through Tokyo once its premature 30-second timeout was
+ * corrected to 45 seconds.
  *
- * Image generation intentionally stays in the default project region. A
- * production A/B test found that Tokyo shortened the model call but made the
- * complete request slower because the generated image still had to be written
- * back to Supabase Storage in Singapore.
+ * Image generation intentionally stays in the default Storage region.
  */
 const TOKYO_TEXT_FUNCTIONS = new Set(["story-analyze", "story-confirm", "story-translate"]);
 
