@@ -1762,8 +1762,8 @@ ${text}`
                         : (() => {
                             const o = imageStyleOptions.find((x) => x.id === imageStyle);
                             return language === "zh"
-                              ? `正在后台准备一张${o?.label}插画；你可以先发布，完成后再回来查看。`
-                              : `Preparing a ${o?.labelEn} illustration in the background. You may publish now and return later.`;
+                              ? `正在生成一张${o?.label}插画，请留在当前页面等待生成完成。`
+                              : `Generating a ${o?.labelEn} illustration. Please stay on this page until it is ready.`;
                           })()}
                     </small>
                   </div>
