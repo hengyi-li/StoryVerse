@@ -59,6 +59,16 @@ export type StoryImageGeneration = {
   retryAfterMs?: number;
 };
 
+/**
+ * StarLobby must be based on the current published-story pool. Keep the refresh
+ * and read sequence in one place so login, reload and every lobby entry cannot
+ * accidentally read a historical recommendation batch.
+ */
+export async function refreshBeforeLobbyLoad<T>(refresh: () => Promise<unknown>, load: () => Promise<T>): Promise<T> {
+  await refresh();
+  return load();
+}
+
 const resumableStoryStatuses: StoryStatus[] = ["analyzing", "pending_review", "needs_confirmation"];
 
 const emotionLabels: Record<string, { value: string; zh: string; en: string }> = {
@@ -616,7 +626,10 @@ export const dataService = {
 
   listLobbyStories: async (): Promise<StoryRecommendation[]> => {
     const [result, ownedStories] = await Promise.all([
-      invoke<{ recommendations: StoryRecommendation[] }>("lobby-stories"),
+      refreshBeforeLobbyLoad(
+        () => invoke("recommendations-refresh"),
+        () => invoke<{ recommendations: StoryRecommendation[] }>("lobby-stories"),
+      ),
       dataService.listOwnedStories(),
     ]);
     const recommendations = result.recommendations.map((raw) => {

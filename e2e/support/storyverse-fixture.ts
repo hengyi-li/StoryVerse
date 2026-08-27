@@ -172,6 +172,11 @@ function storyRow(userId: string, displayName: string, suffix: string, sourceKin
   };
 }
 
+function embeddingVector(primary: number, secondary = 0) {
+  const values = Array.from({ length: 1024 }, (_, index) => (index === 0 ? primary : index === 1 ? secondary : 0));
+  return `[${values.join(",")}]`;
+}
+
 export async function seedLobby(account: TestAccount) {
   const seedAuthor = await createAccount({ displayName: "E2E 故事作者", pretestRequired: false });
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -203,6 +208,28 @@ export async function seedLobby(account: TestAccount) {
   if (translationError) throw translationError;
   const ownStory = data?.find((story) => story.user_id === account.id);
   const seedStory = data?.find((story) => story.source_kind === "seed");
+  if (!ownStory || !seedStory) throw new Error("E2E story fixture failed");
+  const { error: embeddingError } = await service.from("story_embeddings").insert([
+    {
+      story_id: ownStory.id,
+      story_embedding: embeddingVector(1),
+      theme_embedding: embeddingVector(1),
+      model: "e2e-embedding",
+      model_version: "e2e-v1",
+      content_hash: `e2e-own-${suffix}`,
+      theme_hash: `e2e-own-theme-${suffix}`,
+    },
+    {
+      story_id: seedStory.id,
+      story_embedding: embeddingVector(1),
+      theme_embedding: embeddingVector(1),
+      model: "e2e-embedding",
+      model_version: "e2e-v1",
+      content_hash: `e2e-seed-${suffix}`,
+      theme_hash: `e2e-seed-theme-${suffix}`,
+    },
+  ]);
+  if (embeddingError) throw embeddingError;
   const { data: config, error: configError } = await service
     .from("algorithm_configs")
     .select("id")
@@ -210,8 +237,7 @@ export async function seedLobby(account: TestAccount) {
     .order("version", { ascending: false })
     .limit(1)
     .single();
-  if (configError || !config || !ownStory || !seedStory)
-    throw configError ?? new Error("E2E recommendation fixture failed");
+  if (configError || !config) throw configError ?? new Error("E2E recommendation fixture failed");
   const { data: preference, error: preferenceError } = await service
     .from("resonance_preferences")
     .select("city_mode,stage_mode,theme_mode")

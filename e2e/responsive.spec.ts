@@ -178,7 +178,7 @@ test.describe("移动端、深路由与基础可访问性", () => {
     await page.keyboard.press("Enter");
 
     const matchScore = page.getByRole("button", { name: /查看共鸣匹配度详情/ });
-    await expect(matchScore).toContainText("共鸣匹配度 82%");
+    await expect(matchScore).toContainText("共鸣匹配度 71%");
     await matchScore.click();
     await expect(page.getByRole("tooltip")).toBeVisible();
     await expectNoHorizontalOverflow(page);

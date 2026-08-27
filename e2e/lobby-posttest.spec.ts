@@ -26,6 +26,15 @@ test.describe("StarLobby 阅读、反馈与后测", () => {
 
     await loginThroughUi(page, account);
     await expect(page).toHaveURL(/\/StarLobby$/);
+    const { data: latestBatch, error: latestBatchError } = await service
+      .from("recommendation_batches")
+      .select("formula_version")
+      .eq("user_id", account.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (latestBatchError) throw latestBatchError;
+    expect(latestBatch.formula_version).toBe("storyverse-recommendation-v1");
     const skipTour = page.getByRole("button", { name: /跳过本页|Skip this page/ });
     await skipTour
       .waitFor({ state: "visible", timeout: 5_000 })
@@ -44,14 +53,13 @@ test.describe("StarLobby 阅读、反馈与后测", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator(".story-panel")).toContainText("花园里的陌生伙伴");
     const matchScore = page.getByRole("button", { name: /查看共鸣匹配度详情/ });
-    await expect(matchScore).toContainText("共鸣匹配度 82%");
+    await expect(matchScore).toContainText("共鸣匹配度 71%");
     await matchScore.hover();
     const scoreDetails = page.getByRole("tooltip");
     await expect(scoreDetails).toContainText("综合参考了你的共鸣选择");
     await expect(scoreDetails).toContainText("人生背景偏好（相异）");
-    await expect(scoreDetails).toContainText("68%");
-    await expect(scoreDetails).toContainText("84%");
-    await expect(scoreDetails).toContainText("89%");
+    await expect(scoreDetails).toContainText("25%");
+    await expect(scoreDetails).toContainText("100%");
     await page.locator(".story-panel h2").hover();
     await matchScore.hover();
     await expect

@@ -394,11 +394,17 @@ export default function App() {
       if (route.authMode) setAuthMode(route.authMode);
       const { gatewaySection: _gatewaySection, authMode: _authMode, ...statePatch } = route;
       update(statePatch);
+      if (statePatch.screen === "starLobby" && user) {
+        void dataService
+          .listLobbyStories()
+          .then((items) => setLocalStories(items.map((item) => item.story)))
+          .catch((error) => console.info("[StoryVerse] StarLobby could not be refreshed after navigation.", error));
+      }
       lastPathRef.current = normalizedPath();
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, [user?.id]);
   useEffect(() => {
     const path = pathFromState(state);
     if (path === lastPathRef.current) {
@@ -473,7 +479,6 @@ export default function App() {
     user?.resonanceExperimentCondition,
   ]);
   const refreshLobbyStories = async () => {
-    await dataService.refreshRecommendations();
     const items = await dataService.listLobbyStories();
     setLocalStories(items.map((item) => item.story));
     return items;
@@ -791,7 +796,7 @@ export default function App() {
     setPosttestProgress(completed);
     setPosttestLoadError("");
     setPosttestNotice("感谢你完成最后一份问卷！ / Thank you for completing the final questionnaire!");
-    update({ screen: "starLobby" });
+    enterStarLobby();
   };
 
   const dismissPosttestReminder = async () => {
@@ -865,7 +870,7 @@ export default function App() {
         onRetry={retryPosttest}
         onSave={savePosttestStep}
         onSubmit={finishPosttest}
-        onBack={() => update({ screen: "starLobby" })}
+        onBack={enterStarLobby}
       />
     );
   } else if (state.screen === "admin") {
@@ -947,8 +952,8 @@ export default function App() {
         displayName={user?.displayName ?? ""}
         update={update}
         onBack={() => update({ screen: "storyEditor", storyEditorStep: 3 })}
-        onContinue={() => {
-          void dataService
+        onContinue={async () => {
+          await dataService
             .saveResonancePreferences(state.resonance)
             .catch((error) => console.info("[StoryVerse] Resonance could not be saved.", error));
           enterStarLobby();

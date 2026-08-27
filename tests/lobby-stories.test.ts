@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { applyStoryTranslation, mergeLobbyStories, type StoryRecommendation } from "../src/services/data-service";
+import { describe, expect, it, vi } from "vitest";
+import {
+  applyStoryTranslation,
+  mergeLobbyStories,
+  refreshBeforeLobbyLoad,
+  type StoryRecommendation,
+} from "../src/services/data-service";
 import { geographicCityScore } from "../src/lib/geo-distance";
 import type { Story } from "../src/types/domain";
 import { storyPayload } from "../supabase/functions/_shared/story-data.ts";
@@ -36,6 +41,33 @@ function story(
 }
 
 describe("StarLobby 故事合并", () => {
+  it("每次读取大厅前都先生成最新推荐批次", async () => {
+    const calls: string[] = [];
+    const result = await refreshBeforeLobbyLoad(
+      async () => {
+        calls.push("refresh");
+      },
+      async () => {
+        calls.push("load");
+        return ["current-story"];
+      },
+    );
+
+    expect(calls).toEqual(["refresh", "load"]);
+    expect(result).toEqual(["current-story"]);
+  });
+
+  it("推荐刷新失败时不会继续展示旧批次", async () => {
+    const load = vi.fn(async () => ["stale-story"]);
+
+    await expect(
+      refreshBeforeLobbyLoad(async () => {
+        throw new Error("refresh failed");
+      }, load),
+    ).rejects.toThrow("refresh failed");
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it("把作者自己的公开故事合并到只包含他人故事的推荐结果中", () => {
     const recommendations: StoryRecommendation[] = [{ story: story("other", "published"), reason: "推荐" }];
     const result = mergeLobbyStories(recommendations, [story("mine", "published")]);
