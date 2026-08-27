@@ -1079,6 +1079,69 @@
   color: var(--admin-text) !important;
   font-weight: 700;
 }
+.admin-story-dialog-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 17, 15, 0.58);
+  backdrop-filter: blur(8px);
+}
+.admin-story-dialog {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--admin-line);
+  border-radius: 20px;
+  background: var(--admin-surface);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.28);
+}
+.admin-story-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid var(--admin-line);
+}
+.admin-story-dialog > header > div {
+  min-width: 0;
+}
+.admin-story-dialog h2 {
+  margin: 5px 0 7px;
+  font-size: clamp(18px, 2.5vw, 26px);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.admin-story-dialog header p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.admin-story-dialog-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  color: var(--admin-muted);
+  background: var(--admin-surface-muted);
+  font-size: 10px;
+}
+.admin-story-full-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+  color: var(--admin-text);
+  font-size: 14px;
+  line-height: 1.95;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .admin-data-row {
   min-height: 78px;
   display: grid;
@@ -2589,6 +2652,31 @@
   .admin-button,
   .admin-text-action {
     min-height: 44px;
+  }
+
+  .admin-story-dialog-backdrop {
+    align-items: end;
+    padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .admin-story-dialog {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+    border-radius: 20px;
+  }
+
+  .admin-story-dialog > header {
+    padding: 20px 18px 15px;
+  }
+
+  .admin-story-dialog-meta {
+    padding: 11px 18px;
+  }
+
+  .admin-story-full-body {
+    padding: 18px;
+    font-size: 15px;
+    line-height: 1.85;
   }
 
   .admin-content {

@@ -58,6 +58,14 @@ test.describe("管理员入口与权限", () => {
     await expect(page.getByText(`@${user.username}`, { exact: false })).toBeVisible();
     await expect(page.getByText(`@${seeded.seedAuthor.username}`, { exact: false })).toBeVisible();
 
+    const ownStoryRow = page.locator(".admin-data-row.is-story").filter({ hasText: "我的社区花园傍晚" });
+    await ownStoryRow.getByRole("button", { name: "查看全文" }).click();
+    const fullStoryDialog = page.getByRole("dialog", { name: "故事全文" });
+    await expect(fullStoryDialog).toBeVisible();
+    await expect(fullStoryDialog).toContainText("耐心合作与真诚交流可以让陌生人共同完成一件有意义的事情");
+    await page.getByRole("button", { name: "关闭故事全文" }).click();
+    await expect(fullStoryDialog).toBeHidden();
+
     const usernameFilter = page.getByLabel("登录账号", { exact: true });
     await usernameFilter.fill(`@${user.username}`);
     await expect(page.getByText("我的社区花园傍晚", { exact: true })).toBeVisible();

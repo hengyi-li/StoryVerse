@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Database,
   Download,
+  Eye,
   FileText,
   Filter,
   Languages,
@@ -30,6 +31,7 @@ import {
   UploadCloud,
   UserRound,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { dataService, type AdminDashboard } from "../../services/data-service";
@@ -1218,6 +1220,7 @@ function StoryManagementToolbar({
 }
 
 function StoryRow({ row, zh, run }: { row: Record<string, unknown>; zh: boolean; run: RunFunction }) {
+  const [showFullStory, setShowFullStory] = useState(false);
   const author = adminStoryAuthor(row);
   const publicationLabel = row.published_at
     ? `${zh ? "发布于" : "Published"} ${new Intl.DateTimeFormat(zh ? "zh-CN" : "en", {
@@ -1227,73 +1230,128 @@ function StoryRow({ row, zh, run }: { row: Record<string, unknown>; zh: boolean;
     : zh
       ? "尚未发布"
       : "Not published";
+
+  useEffect(() => {
+    if (!showFullStory) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowFullStory(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showFullStory]);
+
   return (
-    <article className="admin-data-row is-story">
-      <div className="admin-row-primary">
-        <span className="admin-row-icon">
-          <BookOpen size={18} />
-        </span>
-        <div>
-          <b>{String(row.title || row.ai_suggested_title || (zh ? "未命名故事" : "Untitled story"))}</b>
-          <span className="admin-story-author">
-            @{author.username || (zh ? "账号未知" : "unknown")} ·{" "}
-            {author.displayName || (zh ? "未设置昵称" : "No display name")}
+    <>
+      <article className="admin-data-row is-story">
+        <div className="admin-row-primary">
+          <span className="admin-row-icon">
+            <BookOpen size={18} />
           </span>
-          <span>
-            {String(row.city || (zh ? "城市未知" : "Unknown city"))} ·{" "}
-            {row.source_kind === "seed" ? (zh ? "冷启动故事" : "Seed story") : zh ? "用户故事" : "User story"} ·{" "}
-            {publicationLabel}
-          </span>
-          <small>{String(row.body).slice(0, 120)}</small>
+          <div>
+            <b>{String(row.title || row.ai_suggested_title || (zh ? "未命名故事" : "Untitled story"))}</b>
+            <span className="admin-story-author">
+              @{author.username || (zh ? "账号未知" : "unknown")} ·{" "}
+              {author.displayName || (zh ? "未设置昵称" : "No display name")}
+            </span>
+            <span>
+              {String(row.city || (zh ? "城市未知" : "Unknown city"))} ·{" "}
+              {row.source_kind === "seed" ? (zh ? "冷启动故事" : "Seed story") : zh ? "用户故事" : "User story"} ·{" "}
+              {publicationLabel}
+            </span>
+            <small>{String(row.body).slice(0, 120)}</small>
+          </div>
         </div>
-      </div>
-      <StatusPill value={row.status} zh={zh} />
-      <div className="admin-row-actions">
-        {row.source_kind === "seed" && (
+        <StatusPill value={row.status} zh={zh} />
+        <div className="admin-row-actions">
+          <button type="button" className="admin-button is-tertiary" onClick={() => setShowFullStory(true)}>
+            <Eye size={14} />
+            {zh ? "查看全文" : "View full story"}
+          </button>
+          {row.source_kind === "seed" && (
+            <button
+              type="button"
+              className="admin-button is-tertiary"
+              onClick={() => {
+                const title = window.prompt(zh ? "修改标题" : "Edit title", String(row.title ?? ""));
+                if (title === null) return;
+                const body = window.prompt(
+                  zh ? "修改正文（100–1500 字）" : "Edit body (100–1,500 characters)",
+                  String(row.body ?? ""),
+                );
+                if (body === null) return;
+                void run(
+                  () => dataService.adminAction("seed-update", { storyId: row.id, title, body }),
+                  zh ? "冷启动故事已保存并重新入队。" : "Seed story saved and requeued.",
+                );
+              }}
+            >
+              {zh ? "编辑" : "Edit"}
+            </button>
+          )}
           <button
             type="button"
             className="admin-button is-tertiary"
             onClick={() => {
-              const title = window.prompt(zh ? "修改标题" : "Edit title", String(row.title ?? ""));
-              if (title === null) return;
-              const body = window.prompt(
-                zh ? "修改正文（100–1500 字）" : "Edit body (100–1,500 characters)",
-                String(row.body ?? ""),
-              );
-              if (body === null) return;
+              const restoring = row.status === "removed";
+              const removalReason = restoring
+                ? ""
+                : window.prompt(zh ? "填写下架原因（会通知作者）" : "Removal reason sent to the author");
+              if (!restoring && !removalReason?.trim()) return;
               void run(
-                () => dataService.adminAction("seed-update", { storyId: row.id, title, body }),
-                zh ? "冷启动故事已保存并重新入队。" : "Seed story saved and requeued.",
+                () =>
+                  dataService.adminAction("story-status", {
+                    storyId: row.id,
+                    status: restoring ? "published" : "removed",
+                    reason: removalReason?.trim() ?? "",
+                  }),
+                zh ? "故事状态已更新。" : "Story updated.",
               );
             }}
           >
-            {zh ? "编辑" : "Edit"}
+            {row.status === "removed" ? (zh ? "恢复公开" : "Restore") : zh ? "下架" : "Remove"}
           </button>
-        )}
-        <button
-          type="button"
-          className="admin-button is-tertiary"
-          onClick={() => {
-            const restoring = row.status === "removed";
-            const removalReason = restoring
-              ? ""
-              : window.prompt(zh ? "填写下架原因（会通知作者）" : "Removal reason sent to the author");
-            if (!restoring && !removalReason?.trim()) return;
-            void run(
-              () =>
-                dataService.adminAction("story-status", {
-                  storyId: row.id,
-                  status: restoring ? "published" : "removed",
-                  reason: removalReason?.trim() ?? "",
-                }),
-              zh ? "故事状态已更新。" : "Story updated.",
-            );
-          }}
+        </div>
+      </article>
+      {showFullStory && (
+        <div
+          className="admin-story-dialog-backdrop"
+          onMouseDown={(event) => event.target === event.currentTarget && setShowFullStory(false)}
         >
-          {row.status === "removed" ? (zh ? "恢复公开" : "Restore") : zh ? "下架" : "Remove"}
-        </button>
-      </div>
-    </article>
+          <section
+            className="admin-story-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={zh ? "故事全文" : "Full story"}
+          >
+            <header>
+              <div>
+                <span className="admin-eyebrow">@{author.username || (zh ? "账号未知" : "unknown")}</span>
+                <h2>{String(row.title || row.ai_suggested_title || (zh ? "未命名故事" : "Untitled story"))}</h2>
+                <p>
+                  {author.displayName || (zh ? "未设置昵称" : "No display name")} ·{" "}
+                  {String(row.city || (zh ? "城市未知" : "Unknown city"))} · {publicationLabel}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="admin-square-button"
+                aria-label={zh ? "关闭故事全文" : "Close full story"}
+                onClick={() => setShowFullStory(false)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="admin-story-dialog-meta">
+              <StatusPill value={row.status} zh={zh} />
+              <span>{zh ? "只读全文" : "Read-only full text"}</span>
+            </div>
+            <article className="admin-story-full-body">
+              {String(row.body ?? "") || (zh ? "这篇故事暂时没有正文。" : "This story does not have body text yet.")}
+            </article>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
